@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import City2DMap from '../components/City2DMap.jsx'
 import ThemePicker from '../components/ThemePicker.jsx'
 import { useStore } from '../store/useStore.js'
-import { poisByStation, poisByLine, poisByDistrict, pois, poiCategories, getCategory, getPoi } from '../data/pois.js'
+import { poisByStation, poisByLine, poisByDistrict, pois, poiCategories, getCategory } from '../data/pois.js'
 import { getStation, getLine } from '../data/metroLines.js'
 import { getDistrict } from '../data/districts.js'
 import { themePois } from '../data/themes.js'
@@ -15,7 +15,6 @@ const SCOPES = [
 ]
 
 export default function PoiLayer() {
-  const layer = useStore((s) => s.layer)
   const stationId = useStore((s) => s.stationId)
   const lineId = useStore((s) => s.lineId)
   const districtId = useStore((s) => s.districtId)
@@ -28,18 +27,24 @@ export default function PoiLayer() {
   const openDrawer = useStore((s) => s.openDrawer)
   const selectStation = useStore((s) => s.selectStation)
 
+  // 用户选择的 scope 若缺少对应上下文（如未选站点），实际回退到更宽的范围；
+  // 用 effectiveScope 保证 chip 选中态与真实列表一致
+  const effectiveScope =
+    poiScope === 'station' && stationId
+      ? 'station'
+      : poiScope === 'line' && lineId
+        ? 'line'
+        : poiScope === 'district' && districtId
+          ? 'district'
+          : 'all'
+
   const scoped = useMemo(() => {
     if (themeId) return themePois(themeId)
-    let list =
-      poiScope === 'station' && stationId
-        ? poisByStation(stationId)
-        : poiScope === 'line' && lineId
-          ? poisByLine(lineId)
-          : poiScope === 'district' && districtId
-            ? poisByDistrict(districtId)
-            : pois
-    return list
-  }, [poiScope, stationId, lineId, districtId, themeId])
+    if (effectiveScope === 'station') return poisByStation(stationId)
+    if (effectiveScope === 'line') return poisByLine(lineId)
+    if (effectiveScope === 'district') return poisByDistrict(districtId)
+    return pois
+  }, [effectiveScope, stationId, lineId, districtId, themeId])
 
   const filtered = useMemo(
     () => (categoryFilter ? scoped.filter((p) => p.category === categoryFilter) : scoped),
@@ -54,12 +59,12 @@ export default function PoiLayer() {
       const t = themePois(themeId)
       return t.length ? `主题路线 · ${t.length}站打卡` : null
     }
-    if (poiScope === 'station' && station) return `${station.name}站周边`
-    if (poiScope === 'line' && lineId) {
+    if (effectiveScope === 'station' && station) return `${station.name}站周边`
+    if (effectiveScope === 'line' && lineId) {
       const l = getLine(lineId)
       return l ? `${l.name}沿线` : null
     }
-    if (poiScope === 'district' && district) return district.name
+    if (effectiveScope === 'district' && district) return district.name
     return '全城景点'
   })()
 
@@ -79,7 +84,7 @@ export default function PoiLayer() {
             return (
               <button
                 key={sc.id}
-                className={'chip' + (poiScope === sc.id && !themeId ? ' on' : '')}
+                className={'chip' + (effectiveScope === sc.id && !themeId ? ' on' : '')}
                 disabled={themeId ? true : disabled}
                 onClick={() => setPoiScope(sc.id)}
               >

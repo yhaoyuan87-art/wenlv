@@ -202,7 +202,7 @@ export default function InfoPanel() {
           </div>
           <h4>站点顺序</h4>
           <div className="station-chain">
-            {line.stations.map((s, i) => (
+            {line.stations.map((s) => (
               <button
                 key={s.stationId}
                 className={'chain-stop' + (stationId === s.stationId ? ' sel' : '')}

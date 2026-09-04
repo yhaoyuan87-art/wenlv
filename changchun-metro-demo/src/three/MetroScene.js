@@ -21,11 +21,20 @@ export class MetroScene {
     this.reduceMotion = false
     this.raycaster = new THREE.Raycaster()
     this.pointer = new THREE.Vector2(-10, -10)
+    this.downPos = null
     this.lineEntries = {}
     this.stationMeshes = []
     this.stationLabels = {}
     this.stationLabelObjs = {}
+    this.labelCandidates = []
+    this.labelSemantic = {}
     this.groundMats = []
+
+    this._onPointerDown = this.onPointerDown.bind(this)
+    this._onPointerMove = this.onPointerMove.bind(this)
+    this._onPointerLeave = this.onPointerLeave.bind(this)
+    this._onClick = this.onClick.bind(this)
+    this._onResize = this.onResize.bind(this)
 
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x070c17)
@@ -62,9 +71,11 @@ export class MetroScene {
     this.buildLines()
     this.updateLabels(null, null)
 
-    this.renderer.domElement.addEventListener('pointermove', this.onPointerMove.bind(this))
-    this.renderer.domElement.addEventListener('click', this.onClick.bind(this))
-    window.addEventListener('resize', this.onResize.bind(this))
+    this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown)
+    this.renderer.domElement.addEventListener('pointermove', this._onPointerMove)
+    this.renderer.domElement.addEventListener('pointerleave', this._onPointerLeave)
+    this.renderer.domElement.addEventListener('click', this._onClick)
+    window.addEventListener('resize', this._onResize)
     this.animate = this.animate.bind(this)
     this.animate()
   }
@@ -168,6 +179,13 @@ export class MetroScene {
         group.add(labelObj)
         this.stationLabels[s.stationId] = labelDiv
         this.stationLabelObjs[s.stationId] = labelObj
+        this.labelCandidates.push({
+          stationId: s.stationId,
+          obj: labelObj,
+          prio: isTransfer ? 2 : 1,
+          w: s.name.length * 12 + 26 + (isTransfer ? 14 : 0),
+          h: 24
+        })
       }
 
       this.scene.add(group)
@@ -175,10 +193,26 @@ export class MetroScene {
     })
   }
 
+  onPointerDown(e) {
+    this.downPos = { x: e.clientX, y: e.clientY }
+  }
+
+  onPointerLeave() {
+    this.pointer.set(-10, -10)
+    this.renderer.domElement.style.cursor = 'grab'
+  }
+
   onPointerMove(e) {
     const rect = this.renderer.domElement.getBoundingClientRect()
     this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
     this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+    const hit = this.pick()
+    this.renderer.domElement.style.cursor = hit ? 'pointer' : 'grab'
+  }
+
+  isDrag(e) {
+    if (!this.downPos) return false
+    return Math.hypot(e.clientX - this.downPos.x, e.clientY - this.downPos.y) > 5
   }
 
   pick() {
@@ -189,7 +223,8 @@ export class MetroScene {
     return hits.length ? hits[0].object : null
   }
 
-  onClick() {
+  onClick(e) {
+    if (this.isDrag(e)) return
     const hit = this.pick()
     if (!hit) return
     if (hit.userData.type === 'station') this.callbacks.onSelectStation(hit.userData.stationId)
@@ -216,8 +251,8 @@ export class MetroScene {
           m.scale.set(1, 1, 1)
         }
       })
-      this.updateLabels(lineId, stationId)
     }
+    this.updateLabels(lineId, stationId)
   }
 
   updateLabels(lineId, stationId) {
@@ -234,9 +269,46 @@ export class MetroScene {
         let show = isSel || (isFocus && (isTransfer || hasPoi))
         if (show && usedNames.has(s.name) && !isSel) show = false
         if (show) usedNames.add(s.name)
-        obj.visible = show
+        this.labelSemantic[s.stationId] = show
         el.classList.toggle('selected', isSel)
       }
+    }
+  }
+
+  cullLabels() {
+    const el = this.renderer.domElement
+    const w = el.clientWidth
+    const h = el.clientHeight
+    const v = new THREE.Vector3()
+    const cands = []
+    for (const c of this.labelCandidates) {
+      const obj = c.obj
+      if (!obj || !this.labelSemantic[c.stationId]) {
+        if (obj) obj.visible = false
+        continue
+      }
+      obj.getWorldPosition(v)
+      v.project(this.camera)
+      if (v.z > 1 || v.z < -1) {
+        obj.visible = false
+        continue
+      }
+      cands.push({
+        prio: c.prio,
+        w: c.w,
+        h: c.h,
+        obj,
+        sx: (v.x * 0.5 + 0.5) * w,
+        sy: (-v.y * 0.5 + 0.5) * h
+      })
+    }
+    cands.sort((a, b) => b.prio - a.prio)
+    const placed = []
+    for (const c of cands) {
+      const box = { x1: c.sx - c.w / 2, x2: c.sx + c.w / 2, y1: c.sy - c.h, y2: c.sy }
+      const collides = placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
+      c.obj.visible = !collides
+      if (!collides) placed.push(box)
     }
   }
 
@@ -308,8 +380,7 @@ export class MetroScene {
       if (t >= 1) this.tween = null
     }
     this.controls.update()
-    const hit = this.pick()
-    this.renderer.domElement.style.cursor = hit ? 'pointer' : 'grab'
+    this.cullLabels()
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
   }
@@ -321,11 +392,16 @@ export class MetroScene {
     this.scene.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose()
       if (obj.material) {
-        Array.isArray(obj.material) ? obj.material.forEach((m) => m.dispose()) : obj.material.dispose()
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose())
+        else obj.material.dispose()
       }
     })
     this.renderer.domElement.remove()
     this.labelRenderer.domElement.remove()
-    window.removeEventListener('resize', this.onResize)
+    this.renderer.domElement.removeEventListener('pointerdown', this._onPointerDown)
+    this.renderer.domElement.removeEventListener('pointermove', this._onPointerMove)
+    this.renderer.domElement.removeEventListener('pointerleave', this._onPointerLeave)
+    this.renderer.domElement.removeEventListener('click', this._onClick)
+    window.removeEventListener('resize', this._onResize)
   }
 }

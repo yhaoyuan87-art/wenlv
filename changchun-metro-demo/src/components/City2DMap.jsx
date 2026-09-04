@@ -29,6 +29,43 @@ export default function City2DMap({
     return pts
   }, [routePoiIds])
 
+  const labelVisible = useMemo(() => {
+    const cands = []
+    if (show.districts && show.labels) {
+      districts.forEach((d) => {
+        cands.push({ key: 'dl-' + d.districtId, x: d.label[0], y: d.label[1], w: d.name.length * 15 + 12, h: 18, prio: 2.5 })
+      })
+    }
+    if (show.stations && show.labels) {
+      metroLines.forEach((line) =>
+        line.stations.forEach((s) => {
+          const isTransfer = (s.transfer || []).length > 0
+          const isSel = highlight.stationId === s.stationId
+          if (!isTransfer && !isSel) return
+          cands.push({ key: 'sl-' + s.stationId, x: s.x, y: s.y - 11, w: s.name.length * 12 + 22, h: 16, prio: isSel ? 3 : 2 })
+        })
+      )
+    }
+    if (show.pois) {
+      poiList.forEach((p) => {
+        const isHL = highlight.poiId === p.poiId
+        const wantName = showPoiNames === 'all' || (showPoiNames === 'hot' && p.hot) || isHL
+        if (!wantName) return
+        cands.push({ key: 'pl-' + p.poiId, x: p.x, y: p.y - poiSize - 6, w: p.name.length * 11 + 10, h: 14, prio: isHL ? 3 : p.hot ? 1.5 : 1 })
+      })
+    }
+    cands.sort((a, b) => b.prio - a.prio)
+    const placed = []
+    const visible = new Set()
+    for (const c of cands) {
+      const box = { x1: c.x - c.w / 2, x2: c.x + c.w / 2, y1: c.y - c.h, y2: c.y }
+      if (placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)) continue
+      placed.push(box)
+      visible.add(c.key)
+    }
+    return visible
+  }, [poiList, showPoiNames, show, highlight.stationId, highlight.poiId, poiSize])
+
   return (
     <div className="map2d-wrap">
       <svg viewBox="0 0 1000 760" className="map2d-svg" role="img" aria-label="长春城市平面图">
@@ -137,17 +174,19 @@ export default function City2DMap({
 
         {show.districts &&
           show.labels &&
-          districts.map((d) => (
-            <text
-              key={'dl-' + d.districtId}
-              x={d.label[0]}
-              y={d.label[1]}
-              className="map-district-label"
-              textAnchor="middle"
-            >
-              {d.name}
-            </text>
-          ))}
+          districts.map((d) =>
+            labelVisible.has('dl-' + d.districtId) ? (
+              <text
+                key={'dl-' + d.districtId}
+                x={d.label[0]}
+                y={d.label[1]}
+                className="map-district-label"
+                textAnchor="middle"
+              >
+                {d.name}
+              </text>
+            ) : null
+          )}
 
         {show.stations &&
           show.labels &&
@@ -155,7 +194,7 @@ export default function City2DMap({
             line.stations.map((s) => {
               const isTransfer = (s.transfer || []).length > 0
               const isSel = highlight.stationId === s.stationId
-              if (!isTransfer && !isSel) return null
+              if ((!isTransfer && !isSel) || !labelVisible.has('sl-' + s.stationId)) return null
               return (
                 <text
                   key={'sl-' + s.stationId}
@@ -192,11 +231,13 @@ export default function City2DMap({
                 ) : (
                   <circle cx={p.x} cy={p.y} r="2.2" fill="#0a0f1c" />
                 )}
-                {(showPoiNames === 'all' || (showPoiNames === 'hot' && p.hot) || isHL) && !inRoute && (
-                  <text x={p.x} y={p.y - poiSize - 6} className="map-poi-label" textAnchor="middle">
-                    {p.name}
-                  </text>
-                )}
+                {(showPoiNames === 'all' || (showPoiNames === 'hot' && p.hot) || isHL) &&
+                  !inRoute &&
+                  labelVisible.has('pl-' + p.poiId) && (
+                    <text x={p.x} y={p.y - poiSize - 6} className="map-poi-label" textAnchor="middle">
+                      {p.name}
+                    </text>
+                  )}
               </g>
             )
           })}

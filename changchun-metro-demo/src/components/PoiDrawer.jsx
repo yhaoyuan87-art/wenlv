@@ -1,6 +1,6 @@
 import { useStore } from '../store/useStore.js'
 import { getPoi, getCategory, relatedPois } from '../data/pois.js'
-import { getStation, getLine } from '../data/metroLines.js'
+import { getStation } from '../data/metroLines.js'
 import { getDistrict } from '../data/districts.js'
 import { PlaceholderMedia } from './PlaceholderMedia.jsx'
 

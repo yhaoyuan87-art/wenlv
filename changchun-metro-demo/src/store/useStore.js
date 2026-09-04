@@ -44,6 +44,7 @@ export const useStore = create((set, get) => ({
   drawerPoiId: initial.drawerPoiId,
   reduceMotion: false,
   legendOpen: false,
+  resetViewToken: 0,
   poiScope: 'station',
   categoryFilter: null,
   themeId: null,
@@ -95,7 +96,7 @@ export const useStore = create((set, get) => ({
     const s = get()
     if (s.layer === 'poi') get().goLayer('metro')
     else if (s.layer === 'metro') get().goLayer('city')
-    else if (s.layer === 'map2d') get().goLayer('poi', s.poiId ? {} : {})
+    else if (s.layer === 'map2d') get().goLayer('poi')
     else get().goLayer('city')
   },
 

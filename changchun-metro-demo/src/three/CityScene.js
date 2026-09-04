@@ -7,6 +7,17 @@ export function toXZ(x, y) {
   return { X: x - 500, Z: y - 380 }
 }
 
+function mulberry32(seed) {
+  let a = seed
+  return function () {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 function pointInPolygon(px, py, poly) {
   let inside = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -32,9 +43,16 @@ export class CityScene {
     this.reduceMotion = false
     this.raycaster = new THREE.Raycaster()
     this.pointer = new THREE.Vector2(-10, -10)
+    this.downPos = null
     this.districtMeshes = []
     this.districtGroups = {}
     this.labelPool = []
+
+    this._onPointerDown = this.onPointerDown.bind(this)
+    this._onPointerMove = this.onPointerMove.bind(this)
+    this._onPointerLeave = this.onPointerLeave.bind(this)
+    this._onClick = this.onClick.bind(this)
+    this._onResize = this.onResize.bind(this)
 
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x0a0f1c)
@@ -73,9 +91,11 @@ export class CityScene {
     this.buildBuildings()
     this.buildLandmarks()
 
-    this.renderer.domElement.addEventListener('pointermove', this.onPointerMove.bind(this))
-    this.renderer.domElement.addEventListener('click', this.onClick.bind(this))
-    window.addEventListener('resize', this.onResize.bind(this))
+    this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown)
+    this.renderer.domElement.addEventListener('pointermove', this._onPointerMove)
+    this.renderer.domElement.addEventListener('pointerleave', this._onPointerLeave)
+    this.renderer.domElement.addEventListener('click', this._onClick)
+    window.addEventListener('resize', this._onResize)
 
     this.animate = this.animate.bind(this)
     this.animate()
@@ -129,7 +149,8 @@ export class CityScene {
     this.scene.add(mesh)
   }
 
-  districtShape(poly) {    const shape = new THREE.Shape()
+  districtShape(poly) {
+    const shape = new THREE.Shape()
     poly.forEach(([x, y], i) => {
       const { X, Z } = toXZ(x, y)
       if (i === 0) shape.moveTo(X, Z)
@@ -183,10 +204,8 @@ export class CityScene {
     const box = new THREE.BoxGeometry(1, 1, 1)
     const mat = new THREE.MeshStandardMaterial({ color: 0x35507e, roughness: 0.9, transparent: true, opacity: 0.85 })
     const positions = []
+    const rand = mulberry32(20260904)
     for (const d of districts) {
-      const { X, Z } = toXZ(d.label[0], d.label[1])
-      const cx = X
-      const cz = Z
       const xs = d.polygon.map((p) => p[0])
       const ys = d.polygon.map((p) => p[1])
       const minX = Math.min(...xs)
@@ -198,18 +217,16 @@ export class CityScene {
       const target = 70
       while (count < target && guard < 600) {
         guard++
-        const px = minX + Math.random() * (maxX - minX)
-        const py = minY + Math.random() * (maxY - minY)
+        const px = minX + rand() * (maxX - minX)
+        const py = minY + rand() * (maxY - minY)
         if (!pointInPolygon(px, py, d.polygon)) continue
         const lx = px - d.label[0]
         const ly = py - d.label[1]
         if (Math.abs(lx) < 26 && Math.abs(ly) < 26) continue
         const { X: wx, Z: wz } = toXZ(px, py)
-        positions.push({ x: wx, z: wz, h: 4 + Math.random() * 14, s: 4 + Math.random() * 6 })
+        positions.push({ x: wx, z: wz, h: 4 + rand() * 14, s: 4 + rand() * 6 })
         count++
       }
-      void cx
-      void cz
     }
     const inst = new THREE.InstancedMesh(box, mat, positions.length)
     const dummy = new THREE.Object3D()
@@ -252,10 +269,25 @@ export class CityScene {
     }
   }
 
+  onPointerDown(e) {
+    this.downPos = { x: e.clientX, y: e.clientY }
+  }
+
+  onPointerLeave() {
+    this.pointer.set(-10, -10)
+    this.updateHover()
+  }
+
   onPointerMove(e) {
     const rect = this.renderer.domElement.getBoundingClientRect()
     this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
     this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+    this.updateHover()
+  }
+
+  isDrag(e) {
+    if (!this.downPos) return false
+    return Math.hypot(e.clientX - this.downPos.x, e.clientY - this.downPos.y) > 5
   }
 
   pick() {
@@ -265,7 +297,27 @@ export class CityScene {
     return hits.length ? hits[0].object : null
   }
 
-  onClick() {
+  updateHover() {
+    const hover = this.pick()
+    const id = hover && hover.userData.type === 'district' ? hover.userData.id : null
+    if (id !== this.hoverId) {
+      this.hoverId = id
+      this.renderer.domElement.style.cursor = id || hover ? 'pointer' : 'grab'
+      for (const d of districts) {
+        const entry = this.districtGroups[d.districtId]
+        if (!entry) continue
+        if (d.districtId === this.selectedId) continue
+        const isHover = d.districtId === id
+        entry.mat.emissive.copy(new THREE.Color(d.color)).multiplyScalar(isHover ? 0.5 : 0.12)
+      }
+      this.labelPool.forEach((el, i) => {
+        el.classList.toggle('active', districts[i] && districts[i].districtId === (id || this.selectedId))
+      })
+    }
+  }
+
+  onClick(e) {
+    if (this.isDrag(e)) return
     const hit = this.pick()
     if (!hit) {
       this.setSelected(null)
@@ -358,22 +410,6 @@ export class CityScene {
       if (t >= 1) this.tween = null
     }
     this.controls.update()
-    const hover = this.pick()
-    const id = hover && hover.userData.type === 'district' ? hover.userData.id : null
-    if (id !== this.hoverId) {
-      this.hoverId = id
-      this.renderer.domElement.style.cursor = id || hover ? 'pointer' : 'grab'
-      for (const d of districts) {
-        const entry = this.districtGroups[d.districtId]
-        if (!entry) continue
-        if (d.districtId === this.selectedId) continue
-        const isHover = d.districtId === id
-        entry.mat.emissive.copy(new THREE.Color(d.color)).multiplyScalar(isHover ? 0.5 : 0.12)
-      }
-      this.labelPool.forEach((el, i) => {
-        el.classList.toggle('active', districts[i] && districts[i].districtId === (id || this.selectedId))
-      })
-    }
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
   }
@@ -385,11 +421,16 @@ export class CityScene {
     this.scene.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose()
       if (obj.material) {
-        Array.isArray(obj.material) ? obj.material.forEach((m) => m.dispose()) : obj.material.dispose()
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose())
+        else obj.material.dispose()
       }
     })
     this.renderer.domElement.remove()
     this.labelRenderer.domElement.remove()
-    window.removeEventListener('resize', this.onResize)
+    this.renderer.domElement.removeEventListener('pointerdown', this._onPointerDown)
+    this.renderer.domElement.removeEventListener('pointermove', this._onPointerMove)
+    this.renderer.domElement.removeEventListener('pointerleave', this._onPointerLeave)
+    this.renderer.domElement.removeEventListener('click', this._onClick)
+    window.removeEventListener('resize', this._onResize)
   }
 }
