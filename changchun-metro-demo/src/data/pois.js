@@ -20,7 +20,7 @@ export const pois = [
     category: 'history',
     districtId: 'district-kuancheng',
     stationIds: ['st-04-03'],
-    x: 614, y: 244,
+    x: 618, y: 236,
     duration: '2-3小时',
     tickets: '成人票 70元，需提前预约',
     openTime: '8:30-16:50（周一闭馆）',
@@ -37,7 +37,7 @@ export const pois = [
     category: 'nature',
     districtId: 'district-jingyue',
     stationIds: ['st-03-30', 'st-03-33'],
-    x: 896, y: 642,
+    x: 876, y: 646,
     duration: '半天',
     tickets: '门票 30元',
     openTime: '8:00-17:00',
@@ -45,7 +45,7 @@ export const pois = [
     detail: '净月潭因形似弯月而得名，与台湾日月潭互为姊妹潭。景区拥有近百平方公里的森林与水面，四季皆宜：春踏青、夏避暑、秋赏叶、冬玩雪，瓦萨国际滑雪节每年在此举行，滑雪场站直达雪场入口。适合骑行环潭、乘船游湖或登山远眺。',
     tags: ['国家5A级景区', '森林氧吧', '四季皆宜'],
     food: [],
-    stationGuide: { station: 'st-03-28', exit: '轻轨3号线净月潭公园站', walk: '正门步行约15分钟；滑雪场站直达雪场' },
+    stationGuide: { station: 'st-03-30', exit: '轻轨3号线净月潭公园站', walk: '正门步行约15分钟；滑雪场站直达雪场' },
     hot: true
   },
   {
@@ -54,7 +54,7 @@ export const pois = [
     category: 'family',
     districtId: 'district-jingyue',
     stationIds: ['st-03-34', 'st-06-16'],
-    x: 908, y: 694,
+    x: 902, y: 726,
     duration: '半天',
     tickets: '通票 198元',
     openTime: '9:00-17:00（季节浮动）',
@@ -62,7 +62,7 @@ export const pois = [
     detail: '长影世纪城依托长春电影制片厂的电影工业底蕴打造，集 4D 特效、巨幕影院、实景演出与影视体验项目于一体，被称为"东方好莱坞"。轻轨3号线与6号线在终点站长影世纪城站交汇，适合亲子与年轻人游玩，冬季另有冰雪体验项目。',
     tags: ['电影主题', '特效体验', '亲子友好'],
     food: [],
-    stationGuide: { station: 'st-03-32', exit: '轻轨3/6号线长影世纪城站终点即达', walk: '出站步行约300米' },
+    stationGuide: { station: 'st-03-34', exit: '轻轨3/6号线长影世纪城站终点即达', walk: '出站步行约300米' },
     hot: true
   },
   {
@@ -87,8 +87,8 @@ export const pois = [
     name: '南湖公园',
     category: 'nature',
     districtId: 'district-chaoyang',
-    stationIds: ['st-03-11', 'st-07-07'],
-    x: 382, y: 452,
+    stationIds: ['st-03-11'],
+    x: 378, y: 436,
     duration: '2-3小时',
     tickets: '免费',
     openTime: '全天开放',
@@ -96,7 +96,7 @@ export const pois = [
     detail: '南湖公园水面面积占全园三分之一，湖畔垂柳与白桦是长春四季的代表画面。冬季湖面成为天然冰场，夏季可乘船游湖，四亭桥、湖心岛是经典机位。公园北门衔接新民大街历史街区，适合串联游览。',
     tags: ['免费', '城市湖泊', '四季皆宜'],
     food: [],
-    stationGuide: { station: 'st-03-11', exit: '轻轨3/7号线南湖广场站', walk: '约350米，步行5分钟' },
+    stationGuide: { station: 'st-03-11', exit: '轻轨3号线南湖广场站', walk: '约350米，步行5分钟' },
     hot: false
   },
   {
@@ -156,7 +156,7 @@ export const pois = [
     category: 'history',
     districtId: 'district-chaoyang',
     stationIds: ['st-02-12', 'st-02-13'],
-    x: 516, y: 342,
+    x: 508, y: 352,
     duration: '1-2小时',
     tickets: '免费（部分场馆需预约）',
     openTime: '街区全天开放',
@@ -206,8 +206,8 @@ export const pois = [
     name: '红旗街商圈',
     category: 'commerce',
     districtId: 'district-chaoyang',
-    stationIds: ['st-07-07', 'st-03-11'],
-    x: 470, y: 432,
+    stationIds: ['st-07-17'],
+    x: 474, y: 478,
     duration: '2-4小时',
     tickets: '免费',
     openTime: '商场 10:00-21:30',
@@ -215,7 +215,7 @@ export const pois = [
     detail: '红旗街汇集大型商场、老字号餐饮与潮流小店，54路有轨电车穿街而过构成独特画面。与这有山、长影旧址博物馆相邻，是朝阳区citywalk的核心节点。',
     tags: ['商圈', '有轨电车', '美食'],
     food: ['老韩头豆腐串', '长春酱骨', '鼎丰真糕点'],
-    stationGuide: { station: 'st-07-07', exit: '地铁7号线南湖广场站', walk: '约350米，步行5分钟' },
+    stationGuide: { station: 'st-07-17', exit: '地铁7号线红旗街站', walk: '约350米，步行5分钟' },
     hot: false
   },
   {
@@ -224,7 +224,7 @@ export const pois = [
     category: 'art',
     districtId: 'district-jingyue',
     stationIds: ['st-06-15'],
-    x: 900, y: 672,
+    x: 872, y: 724,
     duration: '2-3小时',
     tickets: '免费，需预约',
     openTime: '9:00-16:30（周一闭馆）',
@@ -249,7 +249,7 @@ export const pois = [
     detail: '长春公园以郁金香主题花展著称，每年五月数十万株郁金香同时开放。园内玫瑰园、药用植物园与台地花园分区明确，四季有景，是绿园区居民的后花园。',
     tags: ['免费', '花卉主题', '春季限定'],
     food: [],
-    stationGuide: { station: 'st-02-08', exit: '地铁2号线和平大街站 B口南行', walk: '约450米，步行7分钟' },
+    stationGuide: { station: 'st-02-07', exit: '地铁2号线和平大街站 B口南行', walk: '约450米，步行7分钟' },
     hot: false
   },
   {
@@ -292,7 +292,7 @@ export const pois = [
     category: 'nature',
     districtId: 'district-nanguan',
     stationIds: ['st-06-11'],
-    x: 704, y: 516,
+    x: 712, y: 524,
     duration: '2小时',
     tickets: '免费',
     openTime: '全天开放',
@@ -326,7 +326,7 @@ export const pois = [
     category: 'nature',
     districtId: 'district-kuancheng',
     stationIds: ['st-08-06'],
-    x: 510, y: 48,
+    x: 492, y: 56,
     duration: '半天',
     tickets: '免费（园内交通另计）',
     openTime: '8:00-17:30',
@@ -368,7 +368,7 @@ export const pois = [
     detail: '东北民族民俗博物馆毗邻世纪广场，系统展示东北地区满族、蒙古族、朝鲜族等民族的民俗文物与生活场景，四合院式展馆本身就是一道风景。与长春国际会展中心相邻，适合与净月线串联游览。',
     tags: ['免费', '民俗文化', '室内展馆'],
     food: [],
-    stationGuide: { station: 'st-03-23', exit: '轻轨3/4号线世纪广场站', walk: '约250米，步行4分钟' },
+    stationGuide: { station: 'st-03-25', exit: '轻轨3/4号线世纪广场站', walk: '约250米，步行4分钟' },
     hot: false
   },
   {
@@ -385,7 +385,7 @@ export const pois = [
     detail: '长春国际会展中心位于伊通河东岸，是长春国际车展、农博会等大型展会的举办地。无展会时外观与广场亦适合打卡，与世纪广场商圈、南溪湿地形成东部动线。',
     tags: ['会展地标', '年度盛会', '轻轨直达'],
     food: [],
-    stationGuide: { station: 'st-03-22', exit: '轻轨3号线会展中心站', walk: '出站步行约200米' },
+    stationGuide: { station: 'st-03-24', exit: '轻轨3号线会展中心站', walk: '出站步行约200米' },
     hot: false
   },
   {
@@ -402,7 +402,7 @@ export const pois = [
     detail: '伊通河是长春的母亲河，沿岸绿道、桥梁与夜景灯光带构成城市休闲主轴。轻轨3号线伊通河站下车即达河岸，从南溪湿地到北大桥可骑行或漫步，黄昏时分尤美。',
     tags: ['免费', '滨水绿道', '夜景'],
     food: [],
-    stationGuide: { station: 'st-03-19', exit: '轻轨3号线伊通河站即达', walk: '出站步行约200米' },
+    stationGuide: { station: 'st-03-21', exit: '轻轨3号线伊通河站即达', walk: '出站步行约200米' },
     hot: false
   }
 ]

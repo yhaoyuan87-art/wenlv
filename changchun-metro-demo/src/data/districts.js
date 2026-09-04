@@ -87,8 +87,8 @@ export const landmarks = [
   { name: '文化广场', districtId: 'district-chaoyang', x: 528, y: 340, h: 20 },
   { name: '卫星广场', districtId: 'district-nanguan', x: 552, y: 521, h: 15 },
   { name: '东方广场', districtId: 'district-erdao', x: 805, y: 326, h: 13 },
-  { name: '净月潭', districtId: 'district-jingyue', x: 896, y: 642, h: 12 },
-  { name: '龙嘉机场', districtId: null, x: 950, y: 88, h: 10 }
+  { name: '净月潭', districtId: 'district-jingyue', x: 876, y: 646, h: 12 },
+  { name: '龙嘉机场', districtId: null, x: 940, y: 150, h: 10 }
 ]
 
 export function getDistrict(id) {

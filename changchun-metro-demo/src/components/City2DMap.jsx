@@ -243,8 +243,8 @@ export default function City2DMap({
           })}
 
         <g className="map-airport">
-          <circle cx="950" cy="88" r="5" fill="none" stroke="#ffb457" strokeWidth="2" />
-          <text x="950" y="72" textAnchor="middle" className="map-airport-label">龙嘉机场</text>
+          <circle cx="940" cy="150" r="5" fill="none" stroke="#ffb457" strokeWidth="2" />
+          <text x="940" y="134" textAnchor="middle" className="map-airport-label">龙嘉机场</text>
         </g>
       </svg>
 
