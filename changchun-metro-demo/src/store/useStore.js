@@ -3,11 +3,12 @@ import { getDistrict } from '../data/districts.js'
 import { getLine, getStation } from '../data/metroLines.js'
 import { getPoi } from '../data/pois.js'
 
+// short：手机底部导航用的短标签；label：桌面顶部 Tab 用的完整标签
 export const LAYERS = [
-  { id: 'city', label: '城市 3D' },
-  { id: 'metro', label: '地铁空间' },
-  { id: 'poi', label: '景点内容' },
-  { id: 'map2d', label: '2D 总览' }
+  { id: 'city', label: '城市 3D', short: '城市' },
+  { id: 'metro', label: '地铁空间', short: '地铁' },
+  { id: 'poi', label: '景点内容', short: '景点' },
+  { id: 'map2d', label: '2D 总览', short: '总览' }
 ]
 
 function parseQuery() {

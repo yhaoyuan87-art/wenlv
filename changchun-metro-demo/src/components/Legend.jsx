@@ -6,6 +6,8 @@ import { themes } from '../data/themes.js'
 export default function Legend() {
   const open = useStore((s) => s.legendOpen)
   const toggleLegend = useStore((s) => s.toggleLegend)
+  const reduceMotion = useStore((s) => s.reduceMotion)
+  const toggleReduceMotion = useStore((s) => s.toggleReduceMotion)
 
   if (!open) return null
 
@@ -54,11 +56,25 @@ export default function Legend() {
           <li>美食街区：桂林路（夜市烧烤）、红旗街（老字号商圈）</li>
           <li>特色体验：净月潭划船、长影拍照场景、长春国际冰雪节（冬季）</li>
         </ul>
+        <h4>显示设置</h4>
+        {/* 顶栏的动效开关在手机端被隐藏，这里补一个入口 */}
+        <div className="legend-motion">
+          <span>动效</span>
+          <button
+            className={'chip' + (reduceMotion ? '' : ' on')}
+            onClick={toggleReduceMotion}
+            aria-pressed={!reduceMotion}
+          >
+            {reduceMotion ? '已关闭（省电）' : '已开启'}
+          </button>
+        </div>
         <h4>操作说明</h4>
         <ul className="legend-help">
           <li>快捷键：数字键 1-4 切换四层，Esc 关闭详情/图例</li>
-          <li>城市 3D 层：拖拽旋转、滚轮缩放、点击分区聚焦，左下角可切换全景/俯视</li>
+          <li>触屏：单指拖动旋转、双指捏合缩放、轻点选中；底部标签栏可切换四层</li>
+          <li>城市 3D 层：拖拽旋转、滚轮缩放、点击分区聚焦，左上角可切换全景/俯视</li>
           <li>地铁层：白色节点为换乘站，线路悬浮表示地下空间，可切换俯视查看线网</li>
+          <li>2D 地图在竖屏下可横向滑动查看完整线网</li>
           <li>四层共享同一份数据，切层后当前对象保持高亮</li>
           <li>顶部搜索可直达任意区域、线路、站点或景点</li>
           <li>路线模式下地图将画出打卡动线，按序号顺序游览</li>

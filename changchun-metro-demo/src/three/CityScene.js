@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import CameraControls from 'camera-controls'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import { districts, landmarks, yitongRiver } from '../data/districts.js'
+import { pixelRatio, fitCamera, portraitPull, observeSize, isMobile } from './adapt.js'
 
 CameraControls.install({ THREE })
 
@@ -49,8 +50,17 @@ export class CityScene {
     this._onPointerDown = this.onPointerDown.bind(this)
     this._onPointerMove = this.onPointerMove.bind(this)
     this._onPointerLeave = this.onPointerLeave.bind(this)
+    this._onPointerUp = this.onPointerUp.bind(this)
     this._onClick = this.onClick.bind(this)
     this._onResize = this.onResize.bind(this)
+    this._onUserInput = () => { this.userMoved = true }
+
+    // 竖屏补偿系数 / 用户是否手动动过镜头 / 最近一次程序化机位
+    this.pull = 1
+    this.userMoved = false
+    this.lastView = null
+    this.tapHit = null
+    this.landmarkHitMeshes = []
 
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x0a0f1c)
@@ -59,8 +69,8 @@ export class CityScene {
     this.camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 1, 4000)
     this.camera.position.set(0, 560, 640)
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    this.renderer.setPixelRatio(pixelRatio())
     this.renderer.setSize(container.clientWidth, container.clientHeight)
     container.appendChild(this.renderer.domElement)
 
@@ -77,6 +87,9 @@ export class CityScene {
     this.controls.maxDistance = 1400
     this.controls.smoothTime = 0.7
     this.controls.draggingSmoothTime = 0.15
+    // 触摸：单指旋转 / 双指缩放由 camera-controls 处理，这里放宽惯性便于小屏操作
+    this.controls.dollyToCursor = false
+    this.controls.addEventListener('controlstart', this._onUserInput)
 
     this.scene.add(new THREE.HemisphereLight(0x8fb5ff, 0x1a2340, 0.9))
     const dir = new THREE.DirectionalLight(0xffffff, 1.1)
@@ -92,11 +105,27 @@ export class CityScene {
     this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown)
     this.renderer.domElement.addEventListener('pointermove', this._onPointerMove)
     this.renderer.domElement.addEventListener('pointerleave', this._onPointerLeave)
+    this.renderer.domElement.addEventListener('pointerup', this._onPointerUp)
+    this.renderer.domElement.addEventListener('pointercancel', this._onPointerUp)
     this.renderer.domElement.addEventListener('click', this._onClick)
-    window.addEventListener('resize', this._onResize)
+    this._stopObserving = observeSize(container, this._onResize)
+
+    // 首次构图：按当前容器宽高比决定 fov 与竖屏拉远系数
+    this.applyViewport()
+    this.resetView()
 
     this.animate = this.animate.bind(this)
     this.animate()
+  }
+
+  /** 同步容器宽高比 → 相机 fov / 竖屏拉远系数 / 标签尺寸档位 */
+  applyViewport() {
+    const w = this.container.clientWidth
+    const h = this.container.clientHeight
+    const aspect = w / Math.max(h, 1)
+    fitCamera(this.camera, aspect)
+    this.pull = portraitPull(aspect)
+    this.compact = isMobile()
   }
 
   buildGround() {
@@ -258,6 +287,18 @@ export class CityScene {
       this.landmarkMeshes = this.landmarkMeshes || []
       this.landmarkMeshes.push(mesh)
 
+      // 触摸热区：地标柱体只有几像素宽，手指点不中；
+      // 叠一个不可见的大判定球（material.visible=false → 不渲染，但仍可被 raycast 命中）
+      const hitR = Math.max(13, Math.min(lm.h / 2 + 6, 24))
+      const hit = new THREE.Mesh(
+        new THREE.SphereGeometry(hitR, 8, 6),
+        new THREE.MeshBasicMaterial({ visible: false })
+      )
+      hit.position.set(X, lm.h / 2, Z)
+      hit.userData = { type: 'landmark', name: lm.name, districtId: lm.districtId }
+      this.scene.add(hit)
+      this.landmarkHitMeshes.push(hit)
+
       const labelDiv = document.createElement('div')
       labelDiv.className = 'landmark-label'
       labelDiv.textContent = lm.name
@@ -269,6 +310,15 @@ export class CityScene {
 
   onPointerDown(e) {
     this.downPos = { x: e.clientX, y: e.clientY }
+    this.updatePointerFromEvent(e)
+    // 触屏没有 hover，pointermove 不会在点击前触发；
+    // 必须在 down 阶段就把命中结果算好，否则 click 时 raycast 用的还是旧坐标
+    this.tapHit = this.pick()
+  }
+
+  onPointerUp(e) {
+    // 触摸结束后清掉 hover 高亮，避免手指离开后仍残留发光
+    if (e.pointerType && e.pointerType !== 'mouse') this.clearHoverVisual()
   }
 
   onPointerLeave() {
@@ -276,23 +326,40 @@ export class CityScene {
     this.updateHover()
   }
 
-  onPointerMove(e) {
+  updatePointerFromEvent(e) {
     const rect = this.renderer.domElement.getBoundingClientRect()
     this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
     this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+  }
+
+  onPointerMove(e) {
+    this.updatePointerFromEvent(e)
     this.updateHover()
   }
 
   isDrag(e) {
     if (!this.downPos) return false
-    return Math.hypot(e.clientX - this.downPos.x, e.clientY - this.downPos.y) > 5
+    return Math.hypot(e.clientX - this.downPos.x, e.clientY - this.downPos.y) > (isMobile() ? 10 : 5)
   }
 
   pick() {
     this.raycaster.setFromCamera(this.pointer, this.camera)
-    const targets = [...this.districtMeshes, ...(this.landmarkMeshes || [])]
+    const targets = [...this.districtMeshes, ...this.landmarkHitMeshes]
     const hits = this.raycaster.intersectObjects(targets, false)
     return hits.length ? hits[0].object : null
+  }
+
+  /** 只清视觉高亮，不动 pointer（点击命中结果已存在 tapHit 里） */
+  clearHoverVisual() {
+    this.hoverId = null
+    for (const d of districts) {
+      const entry = this.districtGroups[d.districtId]
+      if (!entry || d.districtId === this.selectedId) continue
+      entry.mat.emissive.copy(new THREE.Color(d.color)).multiplyScalar(0.12)
+    }
+    this.labelPool.forEach((el, i) => {
+      el.classList.toggle('active', !!districts[i] && districts[i].districtId === this.selectedId)
+    })
   }
 
   updateHover() {
@@ -315,8 +382,13 @@ export class CityScene {
   }
 
   onClick(e) {
-    if (this.isDrag(e)) return
-    const hit = this.pick()
+    if (this.isDrag(e)) {
+      this.tapHit = null
+      return
+    }
+    // 优先用 pointerdown 阶段算好的命中结果（触屏必须），鼠标退化为实时拾取
+    const hit = this.tapHit || this.pick()
+    this.tapHit = null
     if (!hit) {
       this.setSelected(null)
       this.callbacks.onSelectDistrict(null)
@@ -360,15 +432,26 @@ export class CityScene {
   }
 
   resetView() {
-    this.flyTo(new THREE.Vector3(0, 560, 640), new THREE.Vector3(0, 0, 0))
+    this.flyTo(new THREE.Vector3(0, 560, 640), new THREE.Vector3(0, 0, 0), !this.lastView)
   }
 
   topView() {
-    this.flyTo(new THREE.Vector3(0, 1000, 4), new THREE.Vector3(0, 0, 0))
+    this.flyTo(new THREE.Vector3(0, 1000, 4), new THREE.Vector3(0, 0, 0), true)
   }
 
-  flyTo(pos, look) {
-    this.controls.setLookAt(pos.x, pos.y, pos.z, look.x, look.y, look.z, !this.reduceMotion)
+  /**
+   * @param pos 目标机位（以 16:9 为基准调好的构图）
+   * @param look 注视点
+   * @param animate 是否补间；false 用于首帧定位与旋转屏后的重新构图
+   */
+  flyTo(pos, look, animate = true) {
+    this.lastView = { pos: pos.clone(), look: look.clone() }
+    const p = new THREE.Vector3(
+      look.x + (pos.x - look.x) * this.pull,
+      look.y + (pos.y - look.y) * this.pull,
+      look.z + (pos.z - look.z) * this.pull
+    )
+    this.controls.setLookAt(p.x, p.y, p.z, look.x, look.y, look.z, animate && !this.reduceMotion)
   }
 
   setReduceMotion(v) {
@@ -380,10 +463,18 @@ export class CityScene {
   onResize() {
     const w = this.container.clientWidth
     const h = this.container.clientHeight
-    this.camera.aspect = w / h
-    this.camera.updateProjectionMatrix()
+    if (!w || !h) return
     this.renderer.setSize(w, h)
     this.labelRenderer.setSize(w, h)
+
+    const prevPull = this.pull
+    this.applyViewport()
+
+    // 旋转屏 / 断点切换导致取景系数变化时，若用户还没手动动过镜头就重新构图
+    if (this.lastView && !this.userMoved && Math.abs(prevPull - this.pull) > 0.001) {
+      const { pos, look } = this.lastView
+      this.flyTo(pos, look, false)
+    }
   }
 
   animate() {
@@ -403,7 +494,9 @@ export class CityScene {
 
   dispose() {
     this.disposed = true
+    this.controls.removeEventListener('controlstart', this._onUserInput)
     this.controls.dispose()
+    if (this._stopObserving) this._stopObserving()
     this.renderer.dispose()
     this.scene.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose()
@@ -417,6 +510,8 @@ export class CityScene {
     this.renderer.domElement.removeEventListener('pointerdown', this._onPointerDown)
     this.renderer.domElement.removeEventListener('pointermove', this._onPointerMove)
     this.renderer.domElement.removeEventListener('pointerleave', this._onPointerLeave)
+    this.renderer.domElement.removeEventListener('pointerup', this._onPointerUp)
+    this.renderer.domElement.removeEventListener('pointercancel', this._onPointerUp)
     this.renderer.domElement.removeEventListener('click', this._onClick)
     window.removeEventListener('resize', this._onResize)
   }

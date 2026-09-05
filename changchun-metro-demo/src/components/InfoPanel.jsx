@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { getDistrict, findDistrictByPoint, cityInfo } from '../data/districts.js'
 import { metroLines, getLine, getStation, getNeighbors } from '../data/metroLines.js'
@@ -12,6 +13,38 @@ function districtStats(districtId) {
   )
   const pois = poisByDistrict(districtId)
   return { lines, stations, pois }
+}
+
+/**
+ * 桌面端是右上角浮层，手机端是底部抽屉（带抓手柄，可折叠收起）。
+ * 手柄本身由 CSS 在非手机断点隐藏，所以桌面端永远不会进入折叠态。
+ */
+function Panel({ children }) {
+  const [collapsed, setCollapsed] = useState(false)
+  const layer = useStore((s) => s.layer)
+  const districtId = useStore((s) => s.districtId)
+  const lineId = useStore((s) => s.lineId)
+  const stationId = useStore((s) => s.stationId)
+
+  // 用 key 重置：选中对象变化时重新挂载组件 → collapsed 自动回到展开态，
+  // 避免用户收起后误以为面板没更新。比直接在 effect 里 setState 更干净。
+  return (
+    <aside
+      key={`${layer}-${districtId || ''}-${lineId || ''}-${stationId || ''}`}
+      className={'info-panel' + (collapsed ? ' collapsed' : '')}
+    >
+      <button
+        className="panel-handle"
+        onClick={() => setCollapsed((v) => !v)}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? '展开详情' : '收起详情'}
+      >
+        <i />
+        <span>{collapsed ? '展开详情' : '收起'}</span>
+      </button>
+      <div className="panel-scroll">{children}</div>
+    </aside>
+  )
 }
 
 export default function InfoPanel() {
@@ -35,7 +68,7 @@ export default function InfoPanel() {
   if (layer === 'city') {
     if (!district) {
       return (
-        <aside className="info-panel">
+        <Panel>
           <h3>{cityInfo.name} · 城市概览</h3>
           <p className="muted">{cityInfo.subtitle}</p>
           <div className="city-stat-grid">
@@ -64,12 +97,12 @@ export default function InfoPanel() {
           <button className="btn ghost" onClick={() => useStore.setState({ resetViewToken: (resetViewToken || 0) + 1 })}>
             重置视角
           </button>
-        </aside>
+        </Panel>
       )
     }
     const stats = districtStats(district.districtId)
     return (
-      <aside className="info-panel">
+      <Panel>
         <h3>{district.name}</h3>
         <p className="muted">{district.intro}</p>
         <div className="stat-row">
@@ -106,7 +139,7 @@ export default function InfoPanel() {
         <button className="btn primary" onClick={() => goLayer('metro')}>
           进入地铁层 →
         </button>
-      </aside>
+      </Panel>
     )
   }
 
@@ -117,7 +150,7 @@ export default function InfoPanel() {
       const nb = getNeighbors(station.stationId)
       const nearPois = poisByStation(station.stationId)
       return (
-        <aside className="info-panel">
+        <Panel>
           <span className="panel-kicker" style={{ color: line.color }}>{line.name}</span>
           <h3>{station.name}站</h3>
           <div className="stat-row">
@@ -171,7 +204,7 @@ export default function InfoPanel() {
           <button className="btn primary" onClick={() => goLayer('poi')}>
             进入沿线景点 →
           </button>
-        </aside>
+        </Panel>
       )
     }
     const line = lineId ? getLine(lineId) : null
@@ -179,7 +212,7 @@ export default function InfoPanel() {
       const poisOnLine = poisByLine(line.lineId)
       const transferStations = line.stations.filter((s) => (s.transfer || []).length)
       return (
-        <aside className="info-panel">
+        <Panel>
           <span className="panel-kicker" style={{ color: line.color }}>
             <b className="line-dot" style={{ background: line.color }} />
             {line.name}
@@ -216,11 +249,11 @@ export default function InfoPanel() {
           <button className="btn primary" onClick={() => goLayer('poi')}>
             查看沿线景点 →
           </button>
-        </aside>
+        </Panel>
       )
     }
     return (
-      <aside className="info-panel">
+      <Panel>
         <h3>地铁空间层</h3>
         <p className="muted">地下线路已抬升显示，白色节点为换乘站。点击线路查看走向，点击站点查看详情与周边景点。</p>
         <div className="panel-lines">
@@ -230,14 +263,14 @@ export default function InfoPanel() {
             </button>
           ))}
         </div>
-      </aside>
+      </Panel>
     )
   }
 
   if (layer === 'map2d') {
     const poi = poiId ? getPoi(poiId) : null
     return (
-      <aside className="info-panel">
+      <Panel>
         <h3>2D 关系总览</h3>
         <p className="muted">同时查看分区、地铁与景点。点击对象可跳回对应层级，顶部工具条可开关图层。</p>
         {district && (
@@ -267,7 +300,7 @@ export default function InfoPanel() {
         <button className="btn ghost" onClick={() => goLayer('city')}>
           回到城市 3D
         </button>
-      </aside>
+      </Panel>
     )
   }
 

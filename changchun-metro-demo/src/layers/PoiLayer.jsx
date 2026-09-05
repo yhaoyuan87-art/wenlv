@@ -76,43 +76,45 @@ export default function PoiLayer() {
   return (
     <div className="poi-layer">
       <div className="poi-toolbar">
-        <ThemePicker />
-        <div className="scope-tabs">
-          {SCOPES.map((sc) => {
-            const disabled =
-              (sc.id === 'station' && !stationId) || (sc.id === 'line' && !lineId) || (sc.id === 'district' && !districtId)
-            return (
-              <button
-                key={sc.id}
-                className={'chip' + (effectiveScope === sc.id && !themeId ? ' on' : '')}
-                disabled={themeId ? true : disabled}
-                onClick={() => setPoiScope(sc.id)}
-              >
-                {sc.label}
-              </button>
-            )
-          })}
-        </div>
-        <div className="cat-tabs">
-          <button className={'chip cat' + (!categoryFilter ? ' on' : '')} onClick={() => setCategoryFilter(null)}>
-            全部类别
-          </button>
-          {poiCategories.map((c) => (
-            <button
-              key={c.id}
-              className={'chip cat' + (categoryFilter === c.id ? ' on' : '')}
-              onClick={() => setCategoryFilter(categoryFilter === c.id ? null : c.id)}
-              style={{ borderColor: categoryFilter === c.id ? c.color : undefined }}
-            >
-              <i className="cat-dot" style={{ background: c.color }} />
-              {c.name}
+        <div className="filter-row">
+          <div className="scope-tabs">
+            {SCOPES.map((sc) => {
+              const disabled =
+                (sc.id === 'station' && !stationId) || (sc.id === 'line' && !lineId) || (sc.id === 'district' && !districtId)
+              return (
+                <button
+                  key={sc.id}
+                  className={'chip' + (effectiveScope === sc.id && !themeId ? ' on' : '')}
+                  disabled={themeId ? true : disabled}
+                  onClick={() => setPoiScope(sc.id)}
+                >
+                  {sc.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="cat-tabs">
+            <button className={'chip cat' + (!categoryFilter ? ' on' : '')} onClick={() => setCategoryFilter(null)}>
+              全部类别
             </button>
-          ))}
+            {poiCategories.map((c) => (
+              <button
+                key={c.id}
+                className={'chip cat' + (categoryFilter === c.id ? ' on' : '')}
+                onClick={() => setCategoryFilter(categoryFilter === c.id ? null : c.id)}
+                style={{ borderColor: categoryFilter === c.id ? c.color : undefined }}
+              >
+                <i className="cat-dot" style={{ background: c.color }} />
+                {c.name}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="poi-count">
           {filtered.length} 个景点{scopeHint ? ` · ${scopeHint}` : ''}
         </div>
       </div>
+      <ThemePicker />
 
       <div className="poi-map-host">
         <City2DMap

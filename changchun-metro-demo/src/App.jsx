@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import TopNav from './components/TopNav.jsx'
+import BottomNav from './components/BottomNav.jsx'
 import Breadcrumb from './components/Breadcrumb.jsx'
 import InfoPanel from './components/InfoPanel.jsx'
 import PoiDrawer from './components/PoiDrawer.jsx'
@@ -56,6 +57,7 @@ export default function App() {
       </main>
       <PoiDrawer />
       <Legend />
+      <BottomNav />
     </div>
   )
 }

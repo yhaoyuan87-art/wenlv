@@ -17,6 +17,13 @@
   --radius: 12px;
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   --sans: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* 安全区（刘海屏 / 手势条），由 JS 读取实际值写入，CSS 内用 calc 兜底 */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --topnav-h: 58px;
+  --bottomnav-h: 0px;
 }
 
 html,
@@ -29,6 +36,18 @@ body {
   font-family: var(--sans);
   font-size: 14px;
   line-height: 1.55;
+  /* 移动端：禁掉橡皮筋回弹与双击缩放延迟，避免和 3D 拖拽冲突 */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* dvh：规避移动端浏览器地址栏收起/展开导致的 100vh 跳动 */
+@supports (height: 100dvh) {
+  html,
+  body {
+    height: 100dvh;
+  }
 }
 
 #root {
@@ -38,6 +57,8 @@ body {
 button {
   font-family: inherit;
   cursor: pointer;
+  /* 移动端：去掉 300ms 点击延迟与灰色高亮块 */
+  touch-action: manipulation;
 }
 
 .app {
@@ -274,6 +295,94 @@ button {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------- 移动端专属控件（默认隐藏，靠 media query 显示） ---------- */
+.nav-search-btn,
+.search-cancel,
+.bottom-nav,
+.panel-handle {
+  display: none;
+}
+
+/* 底部四层导航（手机端替代顶部 Tab，拇指可达） */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  align-items: stretch;
+  background: linear-gradient(0deg, rgba(13, 20, 38, 0.98), rgba(13, 20, 38, 0.9));
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  padding-bottom: var(--safe-b);
+  padding-left: var(--safe-l);
+  padding-right: var(--safe-r);
+}
+
+.bottom-tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 54px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 2px 4px;
+}
+
+.bottom-tab em {
+  font-style: normal;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(120, 160, 255, 0.12);
+  transition: all 0.2s;
+}
+
+.bottom-tab span {
+  font-size: 11.5px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.bottom-tab.on {
+  color: var(--accent);
+}
+
+.bottom-tab.on em {
+  background: linear-gradient(120deg, #45e0ff, #3d8bff);
+  color: #06121f;
+  box-shadow: 0 2px 10px rgba(56, 180, 255, 0.4);
+}
+
+/* 横向滚动容器（筛选条等，避免换行吃掉竖向空间） */
+.scroll-x {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-x > * {
+  flex: none;
+  scroll-snap-align: start;
+}
+
 /* ---------- breadcrumb ---------- */
 .breadcrumb-bar {
   flex: none;
@@ -371,12 +480,15 @@ button {
 .three-host {
   position: absolute;
   inset: 0;
+  /* 触屏：阻止浏览器把手势解释成页面滚动/缩放，交给 camera-controls */
+  touch-action: none;
 }
 
 .three-host canvas {
   display: block;
   position: absolute;
   inset: 0;
+  touch-action: none;
 }
 
 .view-controls {
@@ -522,6 +634,41 @@ button {
   }
 }
 
+/* 移动端底部抽屉的抓手柄 + 折叠开关 */
+.panel-handle {
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 0 10px;
+  margin: -4px 0 0;
+  font-size: 11.5px;
+  letter-spacing: 1px;
+}
+
+.panel-handle i {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(142, 160, 192, 0.45);
+  display: block;
+}
+
+.info-panel.collapsed {
+  max-height: none;
+}
+
+.info-panel.collapsed .panel-scroll {
+  display: none;
+}
+
+.info-panel.collapsed .panel-handle i {
+  background: var(--accent);
+}
+
 .info-panel h3 {
   margin: 4px 0 6px;
   font-size: 18px;
@@ -543,8 +690,8 @@ button {
   font-weight: 600;
 }
 
-.info-panel > .btn.primary,
-.info-panel > .btn.ghost {
+.panel-scroll > .btn.primary,
+.panel-scroll > .btn.ghost {
   margin-top: 16px;
   width: 100%;
 }
@@ -826,6 +973,15 @@ button {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* 桌面端：范围 + 类别两组 chip 与计数同行排布；手机端由 media query 改为横向滑动 */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .poi-count {
@@ -1628,16 +1784,46 @@ button {
   gap: 4px;
 }
 
+/* 图例内的动效开关：仅手机端显示（顶栏那个被隐藏了） */
+.legend-motion {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  padding: 4px 0;
+}
+
 /* ---------- responsive ---------- */
-@media (max-width: 1100px) {
+
+/* 大屏：搜索框与品牌副标题收缩 */
+@media (max-width: 1240px) {
   .search-box input {
-    width: 170px;
+    width: 200px;
   }
   .brand-text span {
     display: none;
   }
 }
 
+/* 平板：信息面板收窄 */
+@media (max-width: 1024px) {
+  .info-panel {
+    width: 280px;
+  }
+  .layer-tab {
+    padding: 7px 10px;
+    font-size: 12.5px;
+  }
+  .search-box input {
+    width: 150px;
+  }
+  .map-hint {
+    display: none;
+  }
+}
+
+/* 窄平板 / 横屏小窗：信息面板转为底部条 */
 @media (max-width: 900px) {
   .info-panel {
     top: auto;
@@ -1645,17 +1831,7 @@ button {
     right: 12px;
     left: 12px;
     width: auto;
-    max-height: 42vh;
-  }
-  .layer-tab {
-    padding: 7px 9px;
-    font-size: 12px;
-  }
-  .search-box input {
-    width: 130px;
-  }
-  .map-hint {
-    display: none;
+    max-height: 40vh;
   }
   .icon-btn {
     padding: 7px 10px;
@@ -1664,59 +1840,559 @@ button {
   .poi-strip {
     padding: 0 12px;
   }
-}
-
-@media (max-width: 720px) {
-  .brand-text span {
-    display: none;
-  }
-  .layer-tab em {
-    display: none;
-  }
-  .search-box {
-    flex: 1;
-  }
-  .search-box input {
-    width: 100%;
-    min-width: 0;
-  }
-  .nav-right {
-    gap: 6px;
-  }
   .view-controls {
     bottom: auto;
     top: 10px;
     left: 10px;
   }
-  .drawer {
-    width: 100vw;
-    right: 0;
-    border-radius: 0;
+}
+
+/* ===================== 手机端（≤720px） ===================== */
+@media (max-width: 720px) {
+  :root {
+    --topnav-h: 52px;
+    --bottomnav-h: 54px;
   }
-  .info-panel {
-    max-height: 38vh;
-    bottom: 8px;
-    right: 8px;
+
+  /* 给底部导航留出空间（stage 是 flex:1，会自动收缩） */
+  .app {
+    padding-bottom: calc(var(--bottomnav-h) + var(--safe-b));
+  }
+
+  /* ---- 顶栏 ---- */
+  .topnav {
+    height: calc(var(--topnav-h) + var(--safe-t));
+    padding: var(--safe-t) 10px 0;
+    gap: 8px;
+    position: relative;
+  }
+
+  .brand {
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .brand-mark {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+  }
+
+  .brand-text b {
+    font-size: 14px;
+    letter-spacing: 0;
+  }
+
+  .brand-text span {
+    display: none;
+  }
+
+  /* 四层 Tab 移到屏幕底部 */
+  .layer-tabs {
+    display: none;
+  }
+
+  .bottom-nav {
+    display: flex;
+  }
+
+  .nav-right {
+    gap: 6px;
+    margin-left: 0;
+    flex: none;
+  }
+
+  .icon-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* 顶栏只保留「搜索 / 分享 / 图例」，动效开关下沉到图例面板 */
+  .icon-btn.motion-only {
+    display: none;
+  }
+
+  .nav-search-btn {
+    display: inline-block;
+  }
+
+  /* ---- 搜索：折叠为图标，激活后铺满顶栏 ---- */
+  .search-box {
+    display: none;
+  }
+
+  .topnav.searching .search-box {
+    display: flex;
+    position: absolute;
+    inset: var(--safe-t) 0 0 0;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    background: var(--bg2);
+    z-index: 5;
+  }
+
+  .topnav.searching .search-box input {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+    padding: 8px 14px;
+    font-size: 16px; /* ≥16px 可阻止 iOS 聚焦时自动放大页面 */
+  }
+
+  .search-cancel {
+    display: inline-block;
+    flex: none;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font-size: 13px;
+    padding: 6px 2px;
+  }
+
+  .search-pop {
+    position: fixed;
+    top: calc(var(--topnav-h) + var(--safe-t) + 6px);
     left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: min(62vh, 420px);
+    z-index: 60;
   }
-  .poi-strip {
+
+  .search-item {
+    padding: 12px 10px; /* 触摸目标 ≥44px */
+  }
+
+  .search-item span {
+    display: none; /* 小屏省空间，只留主名称 */
+  }
+
+  .nav-toast {
+    top: calc(var(--topnav-h) + var(--safe-t) + 8px);
+    left: 12px;
+    right: 12px;
+    text-align: center;
+  }
+
+  /* ---- 面包屑：单行横向滚动 ---- */
+  .breadcrumb-bar {
+    padding: 6px 10px;
     gap: 8px;
   }
-  .poi-card {
-    min-width: 150px;
+
+  .breadcrumb {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    min-width: 0;
   }
-  .map2d-svg {
-    min-height: 0;
+
+  .breadcrumb::-webkit-scrollbar {
+    display: none;
   }
-  .theme-card {
-    padding: 8px 10px;
+
+  .crumb-wrap {
+    flex: none;
   }
-  .legend-panel {
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
+
+  .back-btn {
+    flex: none;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  /* ---- 3D 视图控件：收进左上角，避开底部导航 ---- */
+  .view-controls {
+    top: 8px;
+    left: 8px;
+    bottom: auto;
+    padding: 4px;
+    gap: 2px;
+  }
+
+  .view-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  /* ---- 3D 标签：加大触摸目标与字号 ---- */
+  .city-label {
+    font-size: 14px;
+    padding: 7px 16px;
+  }
+
+  .landmark-label {
+    font-size: 12px;
+  }
+
+  .metro-ground-label {
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  .metro-station-label {
+    font-size: 13px;
+    padding: 6px 12px;
+    gap: 6px;
+  }
+
+  .t-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  /* ---- 信息面板：可折叠底部抽屉 ---- */
+  .info-panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
     width: auto;
-    max-height: 60vh;
+    max-height: 46vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-left: 0;
+    border-bottom: 0;
+    padding: 10px 14px calc(16px + var(--safe-b));
+    padding-left: calc(14px + var(--safe-l));
+    padding-right: calc(14px + var(--safe-r));
+    animation: sheetIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+    z-index: 16;
+  }
+
+  .panel-handle {
+    display: flex;
+  }
+
+  .info-panel h3 {
+    font-size: 17px;
+  }
+
+  .stat b {
+    font-size: 18px;
+  }
+
+  .mini-poi,
+  .nb,
+  .chain-stop {
+    padding: 10px; /* 触摸目标 */
+  }
+
+  .chain-stop {
+    padding: 7px 11px;
+  }
+
+  /* ---- 景点层 / 2D 层工具条：手机端改为一行横向滑动，不再换行吃掉竖向空间 ---- */
+  .poi-layer,
+  .map-layer {
+    overflow: hidden;
+  }
+
+  .filter-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .filter-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filter-row > * {
+    display: flex;
+    flex-wrap: nowrap;
+    flex: none;
+    gap: 6px;
+  }
+
+  .poi-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 10px 6px;
+    overflow: visible;
+  }
+
+  .poi-count {
+    margin-left: 0;
+    align-self: flex-start;
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+
+  .map-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .map-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .map-toolbar > * {
+    flex: none;
+  }
+
+  .map-toolbar-title,
+  .map-hint {
+    display: none;
+  }
+
+  .chip {
+    padding: 8px 13px;
+    font-size: 12.5px;
+  }
+
+  .theme-picker {
+    padding: 0 10px 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .theme-picker::-webkit-scrollbar {
+    display: none;
+  }
+
+  .theme-picker > * {
+    flex: none;
+  }
+
+  .theme-picker-label {
+    display: none;
+  }
+
+  /* 主题卡片在横向滚动条里会挤压布局，改为独占一行 */
+  .theme-card {
+    position: static;
+    flex-basis: 100%;
+  }
+
+  .theme-picker:has(.theme-card) {
+    flex-wrap: wrap;
+  }
+
+  /* ---- 2D 地图：竖屏下放大到可阅读尺寸，允许横向滑动 ---- */
+  .poi-map-host,
+  .map2d-host {
+    padding: 4px 10px 10px;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    align-items: flex-start;
+  }
+
+  .map2d-wrap {
+    min-width: 520px;
+    height: auto;
+  }
+
+  .map2d-svg {
+    width: 100%;
+    height: auto;
+    max-height: none;
+  }
+
+  .map-district-label {
+    font-size: 19px;
+    letter-spacing: 3px;
+  }
+
+  .map-station-label {
+    font-size: 14px;
+    stroke-width: 3.5;
+  }
+
+  .map-poi-label {
+    font-size: 15px;
+    stroke-width: 4;
+  }
+
+  .map-tooltip {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
+  /* ---- 景点卡片条 ---- */
+  .poi-strip {
+    padding: 6px 10px 12px;
+    gap: 8px;
+    scroll-snap-type: x proximity;
+  }
+
+  .poi-card {
+    min-width: 156px;
+    padding: 10px 13px;
+    scroll-snap-align: start;
+  }
+
+  /* ---- 详情抽屉：全屏 + 安全区 ---- */
+  .drawer {
+    width: 100vw;
+    border-radius: 0;
+    border-left: 0;
+    padding-top: var(--safe-t);
+    animation: drawerUp 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .drawer-close {
+    top: calc(10px + var(--safe-t));
+    right: calc(10px + var(--safe-r));
+    width: 38px;
+    height: 38px;
+    font-size: 20px;
+  }
+
+  .drawer-body {
+    padding: 14px 14px calc(28px + var(--safe-b));
+  }
+
+  .drawer-media-actions .btn,
+  .drawer-links .btn {
+    min-height: 44px;
+  }
+
+  .related-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* ---- 图例：底部抽屉 ---- */
+  .legend-panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 72vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 14px 16px calc(18px + var(--safe-b));
+    animation: sheetIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .legend-row {
+    font-size: 13px;
+    padding: 3px 0;
+  }
+
+  .legend-head button {
+    font-size: 24px;
+    padding: 0 4px;
+  }
+
+  .legend-motion {
+    display: flex;
+  }
+}
+
+/* 小屏手机（≤400px）进一步压缩 */
+@media (max-width: 400px) {
+  .brand-text b {
+    font-size: 13px;
+  }
+  .icon-btn {
+    padding: 6px 8px;
+    font-size: 11.5px;
+  }
+  .bottom-tab span {
+    font-size: 11px;
+  }
+  .stat {
+    padding: 8px 4px;
+  }
+  .drawer-gallery {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 手机横屏：竖向空间紧张，压缩顶栏与面包屑 */
+@media (max-height: 480px) and (max-width: 900px) {
+  :root {
+    --topnav-h: 44px;
+    --bottomnav-h: 48px;
+  }
+  .breadcrumb-bar {
+    display: none;
+  }
+  .bottom-tab {
+    height: 48px;
+    flex-direction: row;
+    gap: 6px;
+  }
+  .info-panel {
+    max-height: 68vh;
+  }
+}
+
+/* 触屏设备：去掉 hover 态残留（避免点完仍高亮） */
+@media (hover: none) {
+  .layer-tab:hover,
+  .icon-btn:hover,
+  .chip:hover:not(:disabled),
+  .mini-poi:hover,
+  .poi-card:hover,
+  .nb:hover:not(:disabled),
+  .chain-stop:hover,
+  .related-card:hover,
+  .btn.ghost:hover,
+  .btn.link:hover,
+  .metro-station-label:hover {
+    color: inherit;
+    border-color: var(--border);
+    background: transparent;
+  }
+  .layer-tab:hover em {
+    color: var(--muted);
+  }
+  .layer-tab.on:hover {
+    color: #06121f;
+    border-color: transparent;
+  }
+  .chip.on:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .icon-btn.on:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .btn.primary:hover {
+    filter: none;
+    box-shadow: none;
+  }
+}
+
+@keyframes sheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drawerUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -1724,7 +2400,8 @@ button {
   .layer-anim,
   .info-panel,
   .drawer,
-  .legend-panel {
+  .legend-panel,
+  .bottom-nav {
     animation: none;
   }
 }

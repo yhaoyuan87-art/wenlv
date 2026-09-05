@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react'
 import { districts, yitongRiver } from '../data/districts.js'
 import { metroLines } from '../data/metroLines.js'
 import { pois, getPoi, getCategory } from '../data/pois.js'
+import { useMediaQuery } from '../hooks/useMediaQuery.js'
+
+/** 触屏或窄屏：需要放大点击热区 */
+const COARSE_QUERY = '(pointer: coarse), (max-width: 720px)'
 
 function riverPath() {
   return yitongRiver.map(([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`)).join(' ')
@@ -17,6 +21,7 @@ export default function City2DMap({
   poiSize = 7
 }) {
   const [hover, setHover] = useState(null)
+  const coarse = useMediaQuery(COARSE_QUERY)
 
   const poiList = useMemo(
     () => (filterPoiIds ? pois.filter((p) => filterPoiIds.includes(p.poiId)) : pois),
@@ -241,6 +246,38 @@ export default function City2DMap({
               </g>
             )
           })}
+
+        {/* 触摸热区：SVG 里的站点/景点圆点在手机上只有几像素，手指点不中。
+            叠一层透明的更大判定圈（fill=transparent 可被命中，fill=none 不行），
+            仅在触屏或窄屏渲染；景点画在站点之后，因此优先级更高。 */}
+        {coarse && (
+          <g className="map-hit-layer">
+            {show.stations &&
+              metroLines.map((line) =>
+                line.stations.map((s) => (
+                  <circle
+                    key={'hs-' + s.stationId}
+                    cx={s.x}
+                    cy={s.y}
+                    r="18"
+                    fill="transparent"
+                    onClick={() => onSelect && onSelect('station', s.stationId)}
+                  />
+                ))
+              )}
+            {show.pois &&
+              poiList.map((p) => (
+                <circle
+                  key={'hp-' + p.poiId}
+                  cx={p.x}
+                  cy={p.y}
+                  r={poiSize + 14}
+                  fill="transparent"
+                  onClick={() => onSelect && onSelect('poi', p.poiId)}
+                />
+              ))}
+          </g>
+        )}
 
         <g className="map-airport">
           <circle cx="940" cy="150" r="5" fill="none" stroke="#ffb457" strokeWidth="2" />

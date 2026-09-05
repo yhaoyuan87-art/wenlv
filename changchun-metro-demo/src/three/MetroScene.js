@@ -5,6 +5,7 @@ import { districts } from '../data/districts.js'
 import { metroLines } from '../data/metroLines.js'
 import { poisByStation } from '../data/pois.js'
 import { toXZ } from './CityScene.js'
+import { pixelRatio, fitCamera, portraitPull, observeSize, isMobile } from './adapt.js'
 
 CameraControls.install({ THREE })
 
@@ -31,8 +32,17 @@ export class MetroScene {
     this._onPointerDown = this.onPointerDown.bind(this)
     this._onPointerMove = this.onPointerMove.bind(this)
     this._onPointerLeave = this.onPointerLeave.bind(this)
+    this._onPointerUp = this.onPointerUp.bind(this)
     this._onClick = this.onClick.bind(this)
     this._onResize = this.onResize.bind(this)
+    this._onUserInput = () => { this.userMoved = true }
+
+    this.pull = 1
+    this.userMoved = false
+    this.lastView = null
+    this.tapHit = null
+    this.stationHitMeshes = []
+    this.labelScale = 1
 
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x070c17)
@@ -41,8 +51,8 @@ export class MetroScene {
     this.camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 1, 4000)
     this.camera.position.set(-80, 420, 560)
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    this.renderer.setPixelRatio(pixelRatio())
     this.renderer.setSize(container.clientWidth, container.clientHeight)
     container.appendChild(this.renderer.domElement)
 
@@ -59,6 +69,8 @@ export class MetroScene {
     this.controls.maxDistance = 1400
     this.controls.smoothTime = 0.7
     this.controls.draggingSmoothTime = 0.15
+    this.controls.dollyToCursor = false
+    this.controls.addEventListener('controlstart', this._onUserInput)
 
     this.scene.add(new THREE.HemisphereLight(0x8fb5ff, 0x141c30, 0.85))
     const dir = new THREE.DirectionalLight(0xffffff, 0.9)
@@ -72,10 +84,37 @@ export class MetroScene {
     this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown)
     this.renderer.domElement.addEventListener('pointermove', this._onPointerMove)
     this.renderer.domElement.addEventListener('pointerleave', this._onPointerLeave)
+    this.renderer.domElement.addEventListener('pointerup', this._onPointerUp)
+    this.renderer.domElement.addEventListener('pointercancel', this._onPointerUp)
     this.renderer.domElement.addEventListener('click', this._onClick)
-    window.addEventListener('resize', this._onResize)
+    this._stopObserving = observeSize(container, this._onResize)
+
+    this.applyViewport()
+    this.resetView()
+
     this.animate = this.animate.bind(this)
     this.animate()
+  }
+
+  /** 同步容器宽高比 → 相机 fov / 竖屏拉远系数 / 标签尺寸档位 */
+  applyViewport() {
+    const w = this.container.clientWidth
+    const h = this.container.clientHeight
+    const aspect = w / Math.max(h, 1)
+    fitCamera(this.camera, aspect)
+    this.pull = portraitPull(aspect)
+    // 手机端 CSS 把站名标签放大了，避让盒必须同步放大，否则会重叠
+    this.labelScale = isMobile() ? 1.3 : 1
+    this.updateLabelMetrics()
+  }
+
+  /** 按当前档位重算标签避让用的包围盒（字符数 × 单字宽 + 内边距） */
+  updateLabelMetrics() {
+    const s = this.labelScale
+    for (const c of this.labelCandidates) {
+      c.w = (c.chars * 12 + 26 + c.extra) * s
+      c.h = 24 * s
+    }
   }
 
   buildGround() {
@@ -158,6 +197,18 @@ export class MetroScene {
         stationMeshes.push(mesh)
         this.stationMeshes.push(mesh)
 
+        // 触摸热区：站点柱体半径只有 2.2（屏幕上约 3px），手指根本点不中；
+        // 叠一个不可见的大判定球（material.visible=false → 不渲染，但可被 raycast 命中）
+        const hitR = isTransfer ? 11 : 8
+        const hit = new THREE.Mesh(
+          new THREE.SphereGeometry(hitR, 8, 6),
+          new THREE.MeshBasicMaterial({ visible: false })
+        )
+        hit.position.set(X, liftY, Z)
+        hit.userData = { type: 'station', stationId: s.stationId, lineId: line.lineId }
+        group.add(hit)
+        this.stationHitMeshes.push(hit)
+
         const dropGeo = new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(X, liftY - 1, Z),
           new THREE.Vector3(X, -1.5, Z)
@@ -181,8 +232,11 @@ export class MetroScene {
           stationId: s.stationId,
           obj: labelObj,
           prio: isTransfer ? 2 : 1,
-          w: s.name.length * 12 + 26 + (isTransfer ? 14 : 0),
-          h: 24
+          // 实际包围盒在 updateLabelMetrics() 里按档位换算，这里只存原始参数
+          chars: s.name.length,
+          extra: isTransfer ? 14 : 0,
+          w: 0,
+          h: 0
         })
       }
 
@@ -193,6 +247,14 @@ export class MetroScene {
 
   onPointerDown(e) {
     this.downPos = { x: e.clientX, y: e.clientY }
+    this.updatePointerFromEvent(e)
+    // 触屏没有 hover，pointermove 不会在点击前触发；
+    // 必须在 down 阶段就把命中结果算好，否则 click 时 raycast 用的还是旧坐标
+    this.tapHit = this.pick()
+  }
+
+  onPointerUp(e) {
+    if (e.pointerType && e.pointerType !== 'mouse') this.renderer.domElement.style.cursor = 'grab'
   }
 
   onPointerLeave() {
@@ -200,30 +262,38 @@ export class MetroScene {
     this.renderer.domElement.style.cursor = 'grab'
   }
 
-  onPointerMove(e) {
+  updatePointerFromEvent(e) {
     const rect = this.renderer.domElement.getBoundingClientRect()
     this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
     this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+  }
+
+  onPointerMove(e) {
+    this.updatePointerFromEvent(e)
     const hit = this.pick()
     this.renderer.domElement.style.cursor = hit ? 'pointer' : 'grab'
   }
 
   isDrag(e) {
     if (!this.downPos) return false
-    return Math.hypot(e.clientX - this.downPos.x, e.clientY - this.downPos.y) > 5
+    return Math.hypot(e.clientX - this.downPos.x, e.clientY - this.downPos.y) > (isMobile() ? 10 : 5)
   }
 
   pick() {
     this.raycaster.setFromCamera(this.pointer, this.camera)
-    const targets = [...this.stationMeshes]
+    const targets = [...this.stationHitMeshes]
     for (const lid in this.lineEntries) targets.push(this.lineEntries[lid].tubeMat ? this.lineEntries[lid].group.children[0] : null)
     const hits = this.raycaster.intersectObjects(targets.filter(Boolean), false)
     return hits.length ? hits[0].object : null
   }
 
   onClick(e) {
-    if (this.isDrag(e)) return
-    const hit = this.pick()
+    if (this.isDrag(e)) {
+      this.tapHit = null
+      return
+    }
+    const hit = this.tapHit || this.pick()
+    this.tapHit = null
     if (!hit) return
     if (hit.userData.type === 'station') this.callbacks.onSelectStation(hit.userData.stationId)
     else if (hit.userData.type === 'line') this.callbacks.onSelectLine(hit.userData.lineId)
@@ -330,15 +400,24 @@ export class MetroScene {
   }
 
   resetView() {
-    this.flyTo(new THREE.Vector3(-80, 420, 560), new THREE.Vector3(0, 0, 0))
+    this.flyTo(new THREE.Vector3(-80, 420, 560), new THREE.Vector3(0, 0, 0), !this.lastView)
   }
 
   topView() {
-    this.flyTo(new THREE.Vector3(0, 980, 4), new THREE.Vector3(0, 0, 0))
+    this.flyTo(new THREE.Vector3(0, 980, 4), new THREE.Vector3(0, 0, 0), true)
   }
 
-  flyTo(pos, look) {
-    this.controls.setLookAt(pos.x, pos.y, pos.z, look.x, look.y, look.z, !this.reduceMotion)
+  /**
+   * @param animate 是否补间；false 用于首帧定位与旋转屏后的重新构图
+   */
+  flyTo(pos, look, animate = true) {
+    this.lastView = { pos: pos.clone(), look: look.clone() }
+    const p = new THREE.Vector3(
+      look.x + (pos.x - look.x) * this.pull,
+      look.y + (pos.y - look.y) * this.pull,
+      look.z + (pos.z - look.z) * this.pull
+    )
+    this.controls.setLookAt(p.x, p.y, p.z, look.x, look.y, look.z, animate && !this.reduceMotion)
   }
 
   setReduceMotion(v) {
@@ -350,10 +429,17 @@ export class MetroScene {
   onResize() {
     const w = this.container.clientWidth
     const h = this.container.clientHeight
-    this.camera.aspect = w / h
-    this.camera.updateProjectionMatrix()
+    if (!w || !h) return
     this.renderer.setSize(w, h)
     this.labelRenderer.setSize(w, h)
+
+    const prevPull = this.pull
+    this.applyViewport()
+
+    if (this.lastView && !this.userMoved && Math.abs(prevPull - this.pull) > 0.001) {
+      const { pos, look } = this.lastView
+      this.flyTo(pos, look, false)
+    }
   }
 
   animate() {
@@ -368,7 +454,9 @@ export class MetroScene {
 
   dispose() {
     this.disposed = true
+    this.controls.removeEventListener('controlstart', this._onUserInput)
     this.controls.dispose()
+    if (this._stopObserving) this._stopObserving()
     this.renderer.dispose()
     this.scene.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose()
@@ -382,6 +470,8 @@ export class MetroScene {
     this.renderer.domElement.removeEventListener('pointerdown', this._onPointerDown)
     this.renderer.domElement.removeEventListener('pointermove', this._onPointerMove)
     this.renderer.domElement.removeEventListener('pointerleave', this._onPointerLeave)
+    this.renderer.domElement.removeEventListener('pointerup', this._onPointerUp)
+    this.renderer.domElement.removeEventListener('pointercancel', this._onPointerUp)
     this.renderer.domElement.removeEventListener('click', this._onClick)
     window.removeEventListener('resize', this._onResize)
   }
