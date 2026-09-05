@@ -22,7 +22,14 @@ export default function ThemePicker() {
           {t.name}
         </button>
       ))}
-      {active && <span className="theme-tip" style={{ borderColor: active.color }}>{active.summary}</span>}
+      {active && (
+        <div className="theme-card" style={{ borderColor: active.color }}>
+          <b style={{ color: active.color }}>{active.name}</b>
+          <span className="theme-card-route">{active.route}</span>
+          <p>{active.summary}</p>
+          <span className="theme-card-tip">💡 {active.tip}</span>
+        </div>
+      )}
     </div>
   )
 }

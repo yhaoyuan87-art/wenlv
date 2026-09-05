@@ -4,6 +4,7 @@ import { getMedia } from '../data/media.js'
 import { getStation } from '../data/metroLines.js'
 import { getDistrict } from '../data/districts.js'
 import { PlaceholderMedia } from './PlaceholderMedia.jsx'
+import { PanoramaViewer } from './PanoramaViewer.jsx'
 
 export default function PoiDrawer() {
   const drawerPoiId = useStore((s) => s.drawerPoiId)
@@ -100,19 +101,27 @@ export default function PoiDrawer() {
             </div>
           )}
 
+          <div className="drawer-section">
+            <h4>视频介绍</h4>
+            {media.status === 'ready' ? (
+              <video className="media-video" src={media.video} poster={media.cover} controls preload="none" />
+            ) : (
+              <div className="media-video media-video-ph" title={`待接入：${media.video}`}>
+                <span className="ph-play big" />
+                <span>视频素材待接入</span>
+              </div>
+            )}
+          </div>
+
+          <div className="drawer-section">
+            <h4>360° 全景</h4>
+            <PanoramaViewer media={media} title={poi.name} seed={poi.poiId + '-pano'} />
+          </div>
+
           <div className="drawer-gallery">
             {media.gallery.map((path, i) => (
               <PlaceholderMedia key={path} seed={poi.poiId + '-g' + (i + 1)} title={`实景图 ${i + 1}`} ratio="4/3" media={{ status: 'placeholder', cover: path }} />
             ))}
-          </div>
-
-          <div className="drawer-media-actions">
-            <button className="btn ghost" onClick={() => alert('视频资源待接入（demo 占位）')}>
-              ▶ 播放视频介绍
-            </button>
-            <button className="btn ghost" onClick={() => alert('全景查看将在 V1.1 提供（demo 占位）')}>
-              ◉ 360° 全景
-            </button>
           </div>
 
           <div className="drawer-section">

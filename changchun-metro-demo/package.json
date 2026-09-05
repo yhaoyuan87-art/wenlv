@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:data": "node scripts/validate-data.mjs"
   },
   "dependencies": {
     "camera-controls": "^3.1.2",

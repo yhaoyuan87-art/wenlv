@@ -4,9 +4,9 @@
   "entries": {
     "poi-001": {
       "status": "ready",
-      "cover": "/media/pois/poi-001/cover.jpg",
+      "cover": "/media/pois/poi-001/cover.svg",
       "video": "/media/pois/poi-001/intro.mp4",
-      "panorama": "/media/pois/poi-001/panorama.jpg"
+      "panorama": "/media/pois/poi-001/panorama.svg"
     }
   }
 }

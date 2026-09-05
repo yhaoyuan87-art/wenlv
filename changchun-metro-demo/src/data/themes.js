@@ -1,3 +1,4 @@
+import { getPoi } from './pois.js'
 import themes from './themes.json'
 
 export { themes }

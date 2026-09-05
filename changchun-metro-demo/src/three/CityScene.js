@@ -253,7 +253,7 @@ export class CityScene {
       const geo = new THREE.CylinderGeometry(4.5, 6, lm.h, 6)
       const mesh = new THREE.Mesh(geo, mat.clone())
       mesh.position.set(X, lm.h / 2, Z)
-      mesh.userData = { type: 'landmark', name: lm.name, districtId: lm.districtId }
+      mesh.userData = { type: 'landmark', name: lm.name, districtId: lm.districtId, baseY: lm.h / 2, phase: (landmarks.indexOf(lm) * Math.PI * 2) / landmarks.length }
       this.scene.add(mesh)
       this.landmarkMeshes = this.landmarkMeshes || []
       this.landmarkMeshes.push(mesh)
@@ -391,6 +391,12 @@ export class CityScene {
     requestAnimationFrame(this.animate)
     const delta = this.clock.getDelta()
     this.controls.update(delta)
+    if (!this.reduceMotion && this.landmarkMeshes) {
+      const t = performance.now() / 1000
+      for (const m of this.landmarkMeshes) {
+        m.position.y = m.userData.baseY + Math.sin(t * 1.2 + m.userData.phase) * 2.4
+      }
+    }
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
   }

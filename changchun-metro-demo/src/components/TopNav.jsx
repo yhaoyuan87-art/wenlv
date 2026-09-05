@@ -26,7 +26,10 @@ export default function TopNav() {
 
   const [kw, setKw] = useState('')
   const [open, setOpen] = useState(false)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [toast, setToast] = useState('')
   const boxRef = useRef(null)
+  const toastTimer = useRef(null)
 
   const results = useMemo(() => {
     const q = kw.trim()
@@ -41,6 +44,12 @@ export default function TopNav() {
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
+
+  const showToast = (msg) => {
+    setToast(msg)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(''), 2200)
+  }
 
   const jump = (item) => {
     setOpen(false)
@@ -58,6 +67,29 @@ export default function TopNav() {
     } else {
       s.openDrawer(item.id)
       s.goLayer('poi')
+    }
+  }
+
+  const share = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      showToast('链接已复制，分享给同行的人吧')
+    } catch {
+      showToast(window.location.href)
+    }
+  }
+
+  const onSearchKey = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (results.length) setActiveIdx((i) => (i + 1) % results.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (results.length) setActiveIdx((i) => (i - 1 + results.length) % results.length)
+    } else if (e.key === 'Enter') {
+      if (results[activeIdx]) jump(results[activeIdx])
+    } else if (e.key === 'Escape') {
+      setOpen(false)
     }
   }
 
@@ -92,15 +124,24 @@ export default function TopNav() {
             placeholder="搜索区域 / 线路 / 站点 / 景点"
             onChange={(e) => {
               setKw(e.target.value)
+              setActiveIdx(0)
               setOpen(true)
             }}
             onFocus={() => setOpen(true)}
+            onKeyDown={onSearchKey}
             aria-label="全局搜索"
           />
           {open && results.length > 0 && (
             <div className="search-pop" role="listbox">
-              {results.map((r) => (
-                <button key={r.type + r.id} className="search-item" onClick={() => jump(r)}>
+              {results.map((r, i) => (
+                <button
+                  key={r.type + r.id}
+                  className={'search-item' + (i === activeIdx ? ' hl' : '')}
+                  role="option"
+                  aria-selected={i === activeIdx}
+                  onClick={() => jump(r)}
+                  onMouseEnter={() => setActiveIdx(i)}
+                >
                   <i style={{ background: r.color }} />
                   <b>{r.name}</b>
                   <span>{r.sub}</span>
@@ -112,6 +153,9 @@ export default function TopNav() {
             <div className="search-pop empty">没有匹配结果</div>
           )}
         </div>
+        <button className="icon-btn" onClick={share} title="复制当前视图链接">
+          分享
+        </button>
         <button className={'icon-btn' + (reduceMotion ? ' on' : '')} onClick={toggleReduceMotion} title="减少动效">
           {reduceMotion ? '动效关' : '动效开'}
         </button>
@@ -119,6 +163,7 @@ export default function TopNav() {
           图例
         </button>
       </div>
+      {toast && <div className="nav-toast">{toast}</div>}
     </header>
   )
 }

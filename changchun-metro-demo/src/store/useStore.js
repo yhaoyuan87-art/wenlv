@@ -19,7 +19,8 @@ function parseQuery() {
     lineId: q.get('line'),
     stationId: q.get('station'),
     poiId: q.get('poi'),
-    drawerPoiId: q.get('poi')
+    drawerPoiId: q.get('poi'),
+    themeId: q.get('theme')
   }
 }
 
@@ -30,6 +31,7 @@ function syncQuery(state) {
   if (state.lineId) q.set('line', state.lineId)
   if (state.stationId) q.set('station', state.stationId)
   if (state.poiId) q.set('poi', state.poiId)
+  if (state.themeId) q.set('theme', state.themeId)
   window.history.replaceState(null, '', `?${q.toString()}`)
 }
 
@@ -47,7 +49,7 @@ export const useStore = create((set, get) => ({
   resetViewToken: 0,
   poiScope: 'station',
   categoryFilter: null,
-  themeId: null,
+  themeId: initial.themeId,
   mapVisibility: { districts: true, lines: true, stations: true, pois: true, labels: true },
 
   goLayer(layer, patch = {}) {
