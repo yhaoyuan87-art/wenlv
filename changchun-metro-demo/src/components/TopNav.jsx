@@ -135,6 +135,16 @@ export default function TopNav() {
       </nav>
 
       <div className="nav-right">
+        <button
+          className={'icon-btn theme-toggle' + (theme === 'light' ? ' light' : '')}
+          onClick={toggleTheme}
+          title={theme === 'light' ? '切换到夜间主题' : '切换到白天主题'}
+          aria-label={theme === 'light' ? '切换到夜间主题' : '切换到白天主题'}
+          aria-pressed={theme === 'light'}
+        >
+          <span className="theme-glyph">{theme === 'light' ? '🌙' : '☀️'}</span>
+          <span className="theme-label">{theme === 'light' ? '夜间' : '白天'}</span>
+        </button>
         <button className="icon-btn nav-search-btn" onClick={() => setMSearch(true)} aria-label="打开搜索">
           搜索
         </button>

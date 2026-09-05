@@ -3,6 +3,7 @@
 }
 
 :root {
+  /* ---- 夜间主题（默认）：深空蓝基调 ---- */
   --bg: #0a0f1c;
   --bg2: #0d1426;
   --panel: rgba(15, 23, 44, 0.88);
@@ -10,12 +11,46 @@
   --border: rgba(120, 160, 255, 0.16);
   --border-strong: rgba(120, 180, 255, 0.35);
   --text: #e8eef9;
+  --text-emphasized: #06121f; /* 高亮文字在浅色渐变底上的深色 */
   --muted: #8ea0c0;
+  --muted-soft: rgba(142, 160, 192, 0.5); /* 面包屑分隔符等弱化文字 */
   --accent: #38e1ff;
   --accent-dim: rgba(56, 225, 255, 0.14);
   --warm: #ffb457;
-  --radius: 12px;
+
+  /* 语义化：面板内嵌卡片、浅色填充底、浅色文字底 */
+  --inset-bg: rgba(120, 160, 255, 0.05);
+  --inset-bg-strong: rgba(120, 160, 255, 0.08);
+  --inset-bg-chip: rgba(10, 16, 32, 0.72);       /* chip / toolbar */
+  --inverse-text: #fff;                           /* 地铁线路徽章上的文字 */
+  --on-accent-text: #06121f;                      /* accent 渐变上的文字 */
+  --label-bg: rgba(10, 18, 36, 0.78);             /* 3D 城市标签底 */
+  --label-text: #dbe8ff;
+  --label-border: rgba(140, 190, 255, 0.35);
+  --station-label-bg: rgba(8, 14, 28, 0.82);
+  --station-label-text: #d5e2f8;
+  --station-label-border: rgba(140, 180, 255, 0.3);
+  --station-transfer-border: rgba(255, 255, 255, 0.55);
+  --landmark-label: rgba(190, 215, 255, 0.85);
+  --ground-label: rgba(142, 160, 192, 0.6);
+
+  /* 顶栏 / 面包屑 / 底部导航 / 场景 */
+  --topbar-bg: linear-gradient(180deg, rgba(13, 20, 38, 0.96), rgba(13, 20, 38, 0.82));
+  --breadcrumb-bg: rgba(10, 15, 28, 0.65);
+  --bottomnav-bg: linear-gradient(0deg, rgba(13, 20, 38, 0.98), rgba(13, 20, 38, 0.9));
+  --stage-glow1: rgba(61, 123, 255, 0.12);
+  --stage-glow2: rgba(56, 225, 255, 0.08);
+  --scene-bg: #0a0f1c;      /* 3D 场景背景（JS 读取同步给 three） */
+  --scene-fog: #0a0f1c;
+  --controls-bg: rgba(10, 16, 32, 0.72);
+
+  /* 顶部导航、抽屉等的遮罩/阴影 */
+  --mask: rgba(4, 8, 16, 0.5);
+  --drawer-shadow: rgba(0, 0, 0, 0.55);
+  --toast-bg: rgba(13, 24, 44, 0.92);
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+
+  --radius: 12px;
   --sans: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, 'Segoe UI', sans-serif;
   /* 安全区（刘海屏 / 手势条），由 JS 读取实际值写入，CSS 内用 calc 兜底 */
   --safe-t: env(safe-area-inset-top, 0px);
@@ -24,6 +59,55 @@
   --safe-r: env(safe-area-inset-right, 0px);
   --topnav-h: 58px;
   --bottomnav-h: 0px;
+}
+
+/* ===================== 白天主题（html.theme-light） =====================
+   清爽的城市蓝天基调：浅色背景 + 宝石蓝点缀，信息更轻盈、对比更强。
+   底层变量全部由上面的语义变量覆写，组件无需改动。 */
+html.theme-light {
+  --bg: #eef3fb;
+  --bg2: #e6eef8;
+  --panel: rgba(255, 255, 255, 0.92);
+  --panel-solid: #ffffff;
+  --border: rgba(63, 92, 150, 0.18);
+  --border-strong: rgba(47, 108, 220, 0.4);
+  --text: #1b2b45;
+  --text-emphasized: #ffffff;
+  --muted: #64748f;
+  --muted-soft: rgba(100, 116, 143, 0.5);
+  --accent: #1f6feb;      /* 白天用偏深的宝石蓝，保证浅底可读 */
+  --accent-dim: rgba(31, 111, 235, 0.1);
+  --accent-grad: linear-gradient(120deg, #3b8bff, #1f6feb); /* 白天加深深蓝，白字可读 */
+  --warm: #e07a1f;
+
+  --inset-bg: rgba(47, 92, 180, 0.06);
+  --inset-bg-strong: rgba(47, 92, 180, 0.09);
+  --inset-bg-chip: rgba(255, 255, 255, 0.75);
+  --inverse-text: #ffffff;
+  --on-accent-text: #ffffff;
+  --label-bg: rgba(255, 255, 255, 0.85);
+  --label-text: #23406f;
+  --label-border: rgba(47, 108, 220, 0.35);
+  --station-label-bg: rgba(255, 255, 255, 0.88);
+  --station-label-text: #24427c;
+  --station-label-border: rgba(47, 108, 220, 0.3);
+  --station-transfer-border: rgba(31, 111, 235, 0.5);
+  --landmark-label: rgba(35, 64, 111, 0.9);
+  --ground-label: rgba(100, 116, 143, 0.7);
+
+  --topbar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.86));
+  --breadcrumb-bg: rgba(240, 245, 252, 0.8);
+  --bottomnav-bg: linear-gradient(0deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.92));
+  --stage-glow1: rgba(110, 155, 235, 0.22);
+  --stage-glow2: rgba(80, 190, 255, 0.16);
+  --scene-bg: #dfe8f8;
+  --scene-fog: #dfe8f8;
+  --controls-bg: rgba(255, 255, 255, 0.8);
+
+  --mask: rgba(23, 35, 58, 0.25);
+  --drawer-shadow: rgba(40, 60, 100, 0.18);
+  --toast-bg: rgba(255, 255, 255, 0.95);
+  --shadow: 0 8px 28px rgba(60, 90, 150, 0.16);
 }
 
 html,
@@ -80,7 +164,7 @@ button {
   align-items: center;
   gap: 16px;
   padding: 0 18px;
-  background: linear-gradient(180deg, rgba(13, 20, 38, 0.96), rgba(13, 20, 38, 0.82));
+  background: var(--topbar-bg);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(8px);
   z-index: 30;
@@ -98,8 +182,8 @@ button {
   height: 30px;
   border-radius: 9px;
   flex: none;
-  background: conic-gradient(from 210deg, #38e1ff, #3d7bff, #9b59f6, #38e1ff);
-  box-shadow: 0 0 14px rgba(56, 225, 255, 0.45);
+  background: conic-gradient(from 210deg, var(--accent), #3d7bff, #9b59f6, var(--accent));
+  box-shadow: 0 0 14px var(--accent-dim);
 }
 
 .brand-text {
@@ -147,7 +231,7 @@ button {
   display: grid;
   place-items: center;
   font-size: 11px;
-  background: rgba(120, 160, 255, 0.12);
+  background: var(--inset-bg-strong);
   color: var(--muted);
 }
 
@@ -157,16 +241,16 @@ button {
 }
 
 .layer-tab.on {
-  color: #06121f;
+  color: var(--text-emphasized);
   background: linear-gradient(120deg, #45e0ff, #3d8bff);
   border-color: transparent;
   font-weight: 600;
-  box-shadow: 0 2px 14px rgba(56, 180, 255, 0.35);
+  box-shadow: 0 2px 14px var(--accent-dim);
 }
 
 .layer-tab.on em {
   background: rgba(255, 255, 255, 0.3);
-  color: #06121f;
+  color: var(--text-emphasized);
 }
 
 .nav-right {
@@ -185,7 +269,7 @@ button {
   padding: 8px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(9, 14, 28, 0.7);
+  background: var(--inset-bg-chip);
   color: var(--text);
   font-size: 13px;
   outline: none;
@@ -197,7 +281,7 @@ button {
 }
 
 .search-box input::placeholder {
-  color: rgba(142, 160, 192, 0.7);
+  color: var(--muted);
 }
 
 .search-pop {
@@ -275,6 +359,35 @@ button {
   border-color: var(--accent);
 }
 
+/* 主题切换按钮：分段式胶囊，点击在白天/夜间间切换 */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  color: var(--accent);
+  border-color: var(--border-strong);
+  background: var(--inset-bg-strong);
+  font-weight: 600;
+}
+.theme-toggle:hover,
+.theme-toggle.light {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.theme-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+.theme-label {
+  font-size: 12px;
+}
+@media (max-width: 720px) {
+  .theme-toggle {
+    padding: 6px 10px;
+  }
+}
+
 .nav-toast {
   position: fixed;
   top: 62px;
@@ -282,11 +395,11 @@ button {
   z-index: 90;
   padding: 9px 16px;
   border-radius: 10px;
-  background: rgba(13, 24, 44, 0.92);
+  background: var(--toast-bg);
   border: 1px solid var(--accent);
   color: var(--accent);
   font-size: 13px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow);
   animation: toast-in 0.25s ease;
 }
 
@@ -311,7 +424,7 @@ button {
   bottom: 0;
   z-index: 40;
   align-items: stretch;
-  background: linear-gradient(0deg, rgba(13, 20, 38, 0.98), rgba(13, 20, 38, 0.9));
+  background: var(--bottomnav-bg);
   border-top: 1px solid var(--border);
   backdrop-filter: blur(10px);
   padding-bottom: var(--safe-b);
@@ -358,9 +471,9 @@ button {
 }
 
 .bottom-tab.on em {
-  background: linear-gradient(120deg, #45e0ff, #3d8bff);
-  color: #06121f;
-  box-shadow: 0 2px 10px rgba(56, 180, 255, 0.4);
+  background: var(--accent-grad);
+  color: var(--text-emphasized);
+  box-shadow: 0 2px 10px var(--accent-dim);
 }
 
 /* 横向滚动容器（筛选条等，避免换行吃掉竖向空间） */
@@ -391,7 +504,7 @@ button {
   justify-content: space-between;
   padding: 7px 18px;
   border-bottom: 1px solid var(--border);
-  background: rgba(10, 15, 28, 0.65);
+  background: var(--breadcrumb-bg);
   z-index: 20;
 }
 
@@ -410,7 +523,7 @@ button {
 
 .crumb-wrap em {
   font-style: normal;
-  color: rgba(142, 160, 192, 0.5);
+  color: var(--muted-soft);
 }
 
 .crumb {
@@ -424,7 +537,7 @@ button {
 
 .crumb:hover {
   color: var(--text);
-  background: rgba(120, 160, 255, 0.08);
+  background: var(--inset-bg-strong);
 }
 
 .crumb.cur {
@@ -452,8 +565,8 @@ button {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(1200px 500px at 70% -10%, rgba(61, 123, 255, 0.12), transparent 60%),
-    radial-gradient(900px 420px at 10% 110%, rgba(56, 225, 255, 0.08), transparent 55%),
+    radial-gradient(1200px 500px at 70% -10%, var(--stage-glow1), transparent 60%),
+    radial-gradient(900px 420px at 10% 110%, var(--stage-glow2), transparent 55%),
     var(--bg);
 }
 
@@ -498,7 +611,7 @@ button {
   display: flex;
   gap: 6px;
   z-index: 12;
-  background: rgba(10, 16, 32, 0.72);
+  background: var(--controls-bg);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 5px;
@@ -531,9 +644,9 @@ button {
   cursor: pointer;
   padding: 4px 12px;
   border-radius: 999px;
-  background: rgba(10, 18, 36, 0.78);
-  border: 1px solid rgba(140, 190, 255, 0.35);
-  color: #dbe8ff;
+  background: var(--label-bg);
+  border: 1px solid var(--label-border);
+  color: var(--label-text);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 1px;
@@ -545,13 +658,13 @@ button {
 .city-label.active {
   border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 0 14px rgba(56, 225, 255, 0.35);
+  box-shadow: 0 0 14px var(--accent-dim);
 }
 
 .landmark-label {
   font-size: 11px;
-  color: rgba(190, 215, 255, 0.85);
-  text-shadow: 0 1px 4px #000;
+  color: var(--landmark-label);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
   user-select: none;
 }
@@ -559,7 +672,7 @@ button {
 .metro-ground-label {
   font-size: 12px;
   letter-spacing: 2px;
-  color: rgba(142, 160, 192, 0.6);
+  color: var(--ground-label);
   user-select: none;
 }
 
@@ -569,9 +682,9 @@ button {
   font-size: 12px;
   padding: 2px 9px;
   border-radius: 999px;
-  background: rgba(8, 14, 28, 0.82);
-  border: 1px solid rgba(140, 180, 255, 0.3);
-  color: #d5e2f8;
+  background: var(--station-label-bg);
+  border: 1px solid var(--station-label-border);
+  color: var(--station-label-text);
   white-space: nowrap;
   display: flex;
   align-items: center;
@@ -586,14 +699,14 @@ button {
 }
 
 .metro-station-label.transfer {
-  border-color: rgba(255, 255, 255, 0.55);
-  color: #fff;
+  border-color: var(--station-transfer-border);
+  color: var(--inverse-text);
 }
 
 .metro-station-label.selected {
   border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 0 12px rgba(56, 225, 255, 0.5);
+  box-shadow: var(--accent-dim);
   font-weight: 600;
 }
 
@@ -601,7 +714,7 @@ button {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: radial-gradient(circle, #fff 0%, #9fd8ff 60%, transparent 100%);
+  background: radial-gradient(circle, var(--inverse-text) 0%, #9fd8ff 60%, transparent 100%);
   display: inline-block;
 }
 
@@ -653,7 +766,7 @@ button {
   width: 40px;
   height: 4px;
   border-radius: 999px;
-  background: rgba(142, 160, 192, 0.45);
+  background: var(--muted-soft);
   display: block;
 }
 
@@ -705,19 +818,19 @@ button {
 }
 
 .btn.primary {
-  background: linear-gradient(120deg, #45e0ff, #3d8bff);
+  background: var(--accent-grad);
   border: 0;
-  color: #06121f;
+  color: var(--on-accent-text);
   font-weight: 700;
 }
 
 .btn.primary:hover {
   filter: brightness(1.12);
-  box-shadow: 0 4px 18px rgba(56, 180, 255, 0.4);
+  box-shadow: 0 4px 18px var(--accent-dim);
 }
 
 .btn.ghost {
-  background: rgba(120, 160, 255, 0.08);
+  background: var(--inset-bg-strong);
   color: var(--text);
 }
 
@@ -726,9 +839,9 @@ button {
 }
 
 .btn.link {
-  background: rgba(120, 160, 255, 0.08);
+  background: var(--inset-bg-strong);
   border: 1px dashed var(--border-strong);
-  color: #bcd6ff;
+  color: var(--muted);
   text-align: left;
 }
 
@@ -745,7 +858,7 @@ button {
 
 .stat {
   flex: 1;
-  background: rgba(120, 160, 255, 0.07);
+  background: var(--inset-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 8px;
@@ -772,7 +885,7 @@ button {
   gap: 6px;
   padding: 3px 10px;
   border-radius: 999px;
-  color: #fff;
+  color: var(--inverse-text);
   font-size: 12px;
   font-weight: 600;
 }
@@ -814,7 +927,7 @@ button {
   padding: 8px 10px;
   border-radius: 9px;
   border: 1px solid var(--border);
-  background: rgba(120, 160, 255, 0.05);
+  background: var(--inset-bg);
   color: var(--text);
   font-size: 13px;
   text-align: left;
@@ -837,7 +950,7 @@ button {
   align-items: baseline;
   gap: 10px;
   padding: 6px 0;
-  border-bottom: 1px dashed rgba(120, 160, 255, 0.12);
+  border-bottom: 1px dashed var(--border);
   font-size: 13px;
 }
 
@@ -866,7 +979,7 @@ button {
   padding: 8px;
   border-radius: 9px;
   border: 1px solid var(--border);
-  background: rgba(120, 160, 255, 0.06);
+  background: var(--inset-bg-strong);
   color: var(--text);
   font-size: 12.5px;
 }
@@ -919,7 +1032,7 @@ button {
   padding: 6px 13px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(10, 16, 32, 0.72);
+  background: var(--inset-bg-chip);
   color: var(--muted);
   font-size: 12.5px;
   transition: all 0.2s;
@@ -988,7 +1101,7 @@ button {
   margin-left: auto;
   font-size: 12.5px;
   color: var(--muted);
-  background: rgba(10, 16, 32, 0.72);
+  background: var(--inset-bg-chip);
   border: 1px solid var(--border);
   padding: 5px 12px;
   border-radius: 999px;
@@ -1035,7 +1148,7 @@ button {
 .poi-card:hover,
 .poi-card.sel {
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(56, 225, 255, 0.18);
+  box-shadow: 0 0 12px var(--accent-dim);
 }
 
 .poi-card-color {
@@ -1199,7 +1312,7 @@ button {
 .drawer-mask {
   position: fixed;
   inset: 0;
-  background: rgba(4, 8, 16, 0.5);
+  background: var(--mask);
   backdrop-filter: blur(2px);
   z-index: 80;
   animation: fadeIn 0.3s ease both;
@@ -1222,7 +1335,7 @@ button {
   width: min(480px, 94vw);
   background: var(--panel-solid);
   border-left: 1px solid var(--border-strong);
-  box-shadow: -12px 0 48px rgba(0, 0, 0, 0.55);
+  box-shadow: -12px 0 48px var(--drawer-shadow);
   z-index: 90;
   overflow-y: auto;
   animation: drawerIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -1247,7 +1360,7 @@ button {
   height: 34px;
   border-radius: 50%;
   border: 1px solid var(--border-strong);
-  background: rgba(8, 13, 26, 0.7);
+  background: var(--inset-bg-strong);
   color: var(--text);
   font-size: 18px;
   z-index: 2;
@@ -1309,7 +1422,7 @@ button {
 }
 
 .city-stat {
-  background: rgba(120, 160, 255, 0.07);
+  background: var(--inset-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
@@ -1356,7 +1469,7 @@ button {
   flex-basis: 100%;
   font-size: 12px;
   color: var(--muted);
-  background: rgba(10, 16, 32, 0.72);
+  background: var(--inset-bg-chip);
   border: 1px dashed var(--border-strong);
   border-radius: 9px;
   padding: 7px 12px;
@@ -1368,7 +1481,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  background: rgba(10, 16, 32, 0.85);
+  background: var(--inset-bg-chip);
   border: 1px solid;
   border-radius: 10px;
   padding: 10px 14px;
@@ -1409,7 +1522,7 @@ button {
 }
 
 .map-route-index {
-  fill: #38e1ff;
+  fill: var(--accent);
   font-size: 11px;
   font-weight: 700;
   pointer-events: none;
@@ -1417,7 +1530,7 @@ button {
 
 .map-route-index.small {
   font-size: 9px;
-  fill: #0a0f1c;
+  fill: var(--on-accent-text);
 }
 
 .map-airport-label {
@@ -1429,10 +1542,60 @@ button {
   stroke-width: 3;
 }
 
+/* 2D 地图 SVG 的浅色适配：SVG 内的文字/描边在暗底为浅色，浅底需反转 */
+html.theme-light .map2d-svg {
+  box-shadow: var(--shadow);
+}
+
+html.theme-light .map-district-label {
+  fill: rgba(35, 64, 111, 0.7);
+}
+
+html.theme-light .map-station-label {
+  fill: #2c4c8e;
+  stroke: rgba(255, 255, 255, 0.9);
+}
+
+html.theme-light .map-poi-label {
+  fill: #23406f;
+  stroke: rgba(255, 255, 255, 0.92);
+}
+
+html.theme-light .map-airport-label {
+  fill: #b5641a;
+  stroke: rgba(255, 255, 255, 0.9);
+}
+
+html.theme-light .map-river-label {
+  fill: rgba(30, 100, 160, 0.8);
+}
+
+html.theme-light .map-route-index {
+  fill: #1f6feb;
+}
+
+/* SVG 里的 map-bg 渐变是内联 defs（暗色），浅色下盖一层更浅的底 */
+html.theme-light .map2d-wrap {
+  background: #dfe8f8;
+  border-radius: var(--radius);
+}
+
+html.theme-light .map2d-svg [id="map-bg"] stop:first-child {
+  stop-color: #ffffff;
+}
+
+html.theme-light .map2d-svg [id="map-bg"] stop:last-child {
+  stop-color: #dfe8f8;
+}
+
+html.theme-light .map2d-svg [id="map-grid"] path {
+  stroke: rgba(47, 92, 180, 0.1);
+}
+
 .drawer-summary {
   font-size: 14.5px;
   font-weight: 600;
-  color: #dce8ff;
+  color: var(--text);
   margin: 6px 0 8px;
 }
 
@@ -1485,7 +1648,7 @@ button {
 .related-card {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(120, 160, 255, 0.05);
+  background: var(--inset-bg);
   color: var(--text);
   padding: 0 0 8px;
   overflow: hidden;
@@ -1517,7 +1680,7 @@ button {
 .drawer-meta {
   margin-top: 22px;
   font-size: 11px;
-  color: rgba(142, 160, 192, 0.65);
+  color: var(--muted-soft);
   border-top: 1px dashed var(--border);
   padding-top: 12px;
 }
@@ -1583,11 +1746,11 @@ button {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  background: rgba(8, 13, 26, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--inset-bg-chip);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 3px 10px;
-  color: #fff;
+  color: var(--text);
 }
 
 .ph-play {
@@ -1653,11 +1816,11 @@ button {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  background: rgba(8, 13, 26, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--inset-bg-chip);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 3px 10px;
-  color: #fff;
+  color: var(--text);
   pointer-events: none;
 }
 
@@ -1680,7 +1843,7 @@ button {
   position: fixed;
   inset: 0;
   z-index: 70;
-  background: rgba(4, 8, 16, 0.4);
+  background: var(--mask);
 }
 
 .legend-panel {

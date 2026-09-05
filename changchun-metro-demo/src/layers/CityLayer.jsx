@@ -25,6 +25,7 @@ export default function CityLayer() {
       }
     })
     scene.setReduceMotion(store.reduceMotion)
+    scene.setTheme()
     if (store.districtId) scene.setSelected(store.districtId)
     sceneRef.current = scene
     return () => {
@@ -37,6 +38,7 @@ export default function CityLayer() {
     let prev = useStore.getState().districtId
     let prevToken = useStore.getState().resetViewToken
     let prevMotion = useStore.getState().reduceMotion
+    let prevTheme = useStore.getState().theme
     const unsub = useStore.subscribe((s) => {
       const scene = sceneRef.current
       if (!scene) return
@@ -51,6 +53,10 @@ export default function CityLayer() {
       if (s.reduceMotion !== prevMotion) {
         prevMotion = s.reduceMotion
         scene.setReduceMotion(s.reduceMotion)
+      }
+      if (s.theme !== prevTheme) {
+        prevTheme = s.theme
+        scene.setTheme()
       }
     })
     return unsub

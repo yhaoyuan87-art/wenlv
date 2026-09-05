@@ -3,6 +3,7 @@ import CameraControls from 'camera-controls'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import { districts, landmarks, yitongRiver } from '../data/districts.js'
 import { pixelRatio, fitCamera, portraitPull, observeSize, isMobile } from './adapt.js'
+import { cssVar, hexToNumber } from '../theme/theme.js'
 
 CameraControls.install({ THREE })
 
@@ -63,8 +64,8 @@ export class CityScene {
     this.landmarkHitMeshes = []
 
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x0a0f1c)
-    this.scene.fog = new THREE.Fog(0x0a0f1c, 900, 1800)
+    this.scene.background = new THREE.Color(this._sceneBg())
+    this.scene.fog = new THREE.Fog(this._sceneBg(), 900, 1800)
 
     this.camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 1, 4000)
     this.camera.position.set(0, 560, 640)
@@ -452,6 +453,19 @@ export class CityScene {
       look.z + (pos.z - look.z) * this.pull
     )
     this.controls.setLookAt(p.x, p.y, p.z, look.x, look.y, look.z, animate && !this.reduceMotion)
+  }
+
+  /** 从 CSS 变量读取场景背景色，供主题联动 */
+  _sceneBg() {
+    const hex = cssVar('--scene-bg')
+    return hexToNumber(hex, 0x0a0f1c)
+  }
+
+  /** 主题切换：同步场景背景与雾，视觉无缝过渡 */
+  setTheme() {
+    const bg = this._sceneBg()
+    if (this.scene.background) this.scene.background.set(bg)
+    if (this.scene.fog) this.scene.fog.color = new THREE.Color(bg)
   }
 
   setReduceMotion(v) {

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { getDistrict } from '../data/districts.js'
 import { getLine, getStation } from '../data/metroLines.js'
 import { getPoi } from '../data/pois.js'
+import { resolveTheme, applyTheme, persistTheme, THEMES } from '../theme/theme.js'
 
 // short：手机底部导航用的短标签；label：桌面顶部 Tab 用的完整标签
 export const LAYERS = [
@@ -37,6 +38,9 @@ function syncQuery(state) {
 }
 
 const initial = parseQuery()
+// 首次进入即应用主题（避免闪屏幕：先同步 class，再挂载 React）
+const initialTheme = resolveTheme()
+applyTheme(initialTheme)
 
 export const useStore = create((set, get) => ({
   layer: initial.layer,
@@ -45,6 +49,7 @@ export const useStore = create((set, get) => ({
   stationId: initial.stationId,
   poiId: initial.poiId,
   drawerPoiId: initial.drawerPoiId,
+  theme: initialTheme,
   reduceMotion: false,
   legendOpen: false,
   resetViewToken: 0,
@@ -52,6 +57,21 @@ export const useStore = create((set, get) => ({
   categoryFilter: null,
   themeId: initial.themeId,
   mapVisibility: { districts: true, lines: true, stations: true, pois: true, labels: true },
+
+  setAppTheme(theme) {
+    const t = theme === THEMES.light ? THEMES.light : THEMES.dark
+    set({ theme: t })
+    applyTheme(t)
+    persistTheme(t)
+    // 同步到 URL ?mode=，方便分享时保留主题状态（?theme= 已被路线主题占用）
+    const q = new URLSearchParams(window.location.search)
+    q.set('mode', t)
+    window.history.replaceState(null, '', `?${q.toString()}`)
+  },
+
+  toggleTheme() {
+    get().setAppTheme(get().theme === THEMES.light ? THEMES.dark : THEMES.light)
+  },
 
   goLayer(layer, patch = {}) {
     set({ layer, ...patch })

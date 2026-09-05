@@ -20,6 +20,7 @@ export default function MetroLayer() {
       onSelectLine: (lineId) => useStore.getState().selectLine(lineId)
     })
     scene.setReduceMotion(store.reduceMotion)
+    scene.setTheme()
     if (store.lineId) scene.highlightLine(store.lineId, store.stationId)
     if (store.stationId) scene.focusStation(store.stationId)
     sceneRef.current = scene
@@ -33,6 +34,7 @@ export default function MetroLayer() {
     let prevLine = useStore.getState().lineId
     let prevStation = useStore.getState().stationId
     let prevMotion = useStore.getState().reduceMotion
+    let prevTheme = useStore.getState().theme
     const unsub = useStore.subscribe((s) => {
       const scene = sceneRef.current
       if (!scene) return
@@ -46,6 +48,10 @@ export default function MetroLayer() {
       if (s.reduceMotion !== prevMotion) {
         prevMotion = s.reduceMotion
         scene.setReduceMotion(s.reduceMotion)
+      }
+      if (s.theme !== prevTheme) {
+        prevTheme = s.theme
+        scene.setTheme()
       }
     })
     return unsub
