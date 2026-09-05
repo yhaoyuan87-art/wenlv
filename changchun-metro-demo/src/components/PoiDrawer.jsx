@@ -1,5 +1,6 @@
 import { useStore } from '../store/useStore.js'
 import { getPoi, getCategory, relatedPois } from '../data/pois.js'
+import { getMedia } from '../data/media.js'
 import { getStation } from '../data/metroLines.js'
 import { getDistrict } from '../data/districts.js'
 import { PlaceholderMedia } from './PlaceholderMedia.jsx'
@@ -23,6 +24,7 @@ export default function PoiDrawer() {
   const station = guide.station ? getStation(guide.station) : null
   const line = station ? station.line : null
   const related = relatedPois(poi)
+  const media = getMedia(poi.poiId)
 
   return (
     <>
@@ -31,7 +33,7 @@ export default function PoiDrawer() {
         <button className="drawer-close" onClick={closeDrawer} aria-label="关闭详情">
           ×
         </button>
-        <PlaceholderMedia seed={poi.poiId} title={poi.name} sub={`${cat.name} · 建议游览 ${poi.duration}`} />
+        <PlaceholderMedia seed={poi.poiId} title={poi.name} sub={`${cat.name} · 建议游览 ${poi.duration}`} media={media} />
         <div className="drawer-body">
           <div className="drawer-tags">
             <span className="tag" style={{ borderColor: cat.color, color: cat.color }}>
@@ -99,9 +101,9 @@ export default function PoiDrawer() {
           )}
 
           <div className="drawer-gallery">
-            <PlaceholderMedia seed={poi.poiId + '-g1'} title="实景图 1" ratio="4/3" />
-            <PlaceholderMedia seed={poi.poiId + '-g2'} title="实景图 2" ratio="4/3" />
-            <PlaceholderMedia seed={poi.poiId + '-g3'} title="实景图 3" ratio="4/3" />
+            {media.gallery.map((path, i) => (
+              <PlaceholderMedia key={path} seed={poi.poiId + '-g' + (i + 1)} title={`实景图 ${i + 1}`} ratio="4/3" media={{ status: 'placeholder', cover: path }} />
+            ))}
           </div>
 
           <div className="drawer-media-actions">

@@ -1,7 +1,9 @@
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import CameraControls from 'camera-controls'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import { districts, landmarks, yitongRiver } from '../data/districts.js'
+
+CameraControls.install({ THREE })
 
 export function toXZ(x, y) {
   return { X: x - 500, Z: y - 380 }
@@ -28,10 +30,6 @@ function pointInPolygon(px, py, poly) {
   return inside
 }
 
-function easeInOutCubic(t) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
-}
-
 export class CityScene {
   constructor(container, callbacks) {
     this.container = container
@@ -39,8 +37,8 @@ export class CityScene {
     this.disposed = false
     this.selectedId = null
     this.hoverId = null
-    this.tween = null
     this.reduceMotion = false
+    this.clock = new THREE.Clock()
     this.raycaster = new THREE.Raycaster()
     this.pointer = new THREE.Vector2(-10, -10)
     this.downPos = null
@@ -73,12 +71,12 @@ export class CityScene {
     this.labelRenderer.domElement.style.pointerEvents = 'none'
     container.appendChild(this.labelRenderer.domElement)
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement)
-    this.controls.enableDamping = true
-    this.controls.dampingFactor = 0.08
+    this.controls = new CameraControls(this.camera, this.renderer.domElement)
     this.controls.maxPolarAngle = Math.PI / 2.15
     this.controls.minDistance = 120
     this.controls.maxDistance = 1400
+    this.controls.smoothTime = 0.7
+    this.controls.draggingSmoothTime = 0.15
 
     this.scene.add(new THREE.HemisphereLight(0x8fb5ff, 0x1a2340, 0.9))
     const dir = new THREE.DirectionalLight(0xffffff, 1.1)
@@ -370,24 +368,13 @@ export class CityScene {
   }
 
   flyTo(pos, look) {
-    if (this.reduceMotion) {
-      this.camera.position.copy(pos)
-      this.controls.target.copy(look)
-      return
-    }
-    this.tween = {
-      t0: performance.now(),
-      duration: 700,
-      fromPos: this.camera.position.clone(),
-      toPos: pos.clone(),
-      fromLook: this.controls.target.clone(),
-      toLook: look.clone()
-    }
+    this.controls.setLookAt(pos.x, pos.y, pos.z, look.x, look.y, look.z, !this.reduceMotion)
   }
 
   setReduceMotion(v) {
     this.reduceMotion = v
-    this.controls.enableDamping = !v
+    this.controls.smoothTime = v ? 0.0001 : 0.7
+    this.controls.draggingSmoothTime = v ? 0.0001 : 0.15
   }
 
   onResize() {
@@ -402,14 +389,8 @@ export class CityScene {
   animate() {
     if (this.disposed) return
     requestAnimationFrame(this.animate)
-    if (this.tween) {
-      const t = Math.min(1, (performance.now() - this.tween.t0) / this.tween.duration)
-      const k = easeInOutCubic(t)
-      this.camera.position.lerpVectors(this.tween.fromPos, this.tween.toPos, k)
-      this.controls.target.lerpVectors(this.tween.fromLook, this.tween.toLook, k)
-      if (t >= 1) this.tween = null
-    }
-    this.controls.update()
+    const delta = this.clock.getDelta()
+    this.controls.update(delta)
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
   }

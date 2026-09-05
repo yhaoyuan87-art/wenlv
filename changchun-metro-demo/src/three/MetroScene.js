@@ -1,14 +1,12 @@
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import CameraControls from 'camera-controls'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import { districts } from '../data/districts.js'
 import { metroLines } from '../data/metroLines.js'
 import { poisByStation } from '../data/pois.js'
 import { toXZ } from './CityScene.js'
 
-function easeInOutCubic(t) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
-}
+CameraControls.install({ THREE })
 
 export class MetroScene {
   constructor(container, callbacks) {
@@ -17,8 +15,8 @@ export class MetroScene {
     this.disposed = false
     this.selectedLineId = null
     this.selectedStationId = null
-    this.tween = null
     this.reduceMotion = false
+    this.clock = new THREE.Clock()
     this.raycaster = new THREE.Raycaster()
     this.pointer = new THREE.Vector2(-10, -10)
     this.downPos = null
@@ -55,12 +53,12 @@ export class MetroScene {
     this.labelRenderer.domElement.style.pointerEvents = 'none'
     container.appendChild(this.labelRenderer.domElement)
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement)
-    this.controls.enableDamping = true
-    this.controls.dampingFactor = 0.08
+    this.controls = new CameraControls(this.camera, this.renderer.domElement)
     this.controls.maxPolarAngle = Math.PI / 2.1
     this.controls.minDistance = 60
     this.controls.maxDistance = 1400
+    this.controls.smoothTime = 0.7
+    this.controls.draggingSmoothTime = 0.15
 
     this.scene.add(new THREE.HemisphereLight(0x8fb5ff, 0x141c30, 0.85))
     const dir = new THREE.DirectionalLight(0xffffff, 0.9)
@@ -340,24 +338,13 @@ export class MetroScene {
   }
 
   flyTo(pos, look) {
-    if (this.reduceMotion) {
-      this.camera.position.copy(pos)
-      this.controls.target.copy(look)
-      return
-    }
-    this.tween = {
-      t0: performance.now(),
-      duration: 700,
-      fromPos: this.camera.position.clone(),
-      toPos: pos.clone(),
-      fromLook: this.controls.target.clone(),
-      toLook: look.clone()
-    }
+    this.controls.setLookAt(pos.x, pos.y, pos.z, look.x, look.y, look.z, !this.reduceMotion)
   }
 
   setReduceMotion(v) {
     this.reduceMotion = v
-    this.controls.enableDamping = !v
+    this.controls.smoothTime = v ? 0.0001 : 0.7
+    this.controls.draggingSmoothTime = v ? 0.0001 : 0.15
   }
 
   onResize() {
@@ -372,14 +359,8 @@ export class MetroScene {
   animate() {
     if (this.disposed) return
     requestAnimationFrame(this.animate)
-    if (this.tween) {
-      const t = Math.min(1, (performance.now() - this.tween.t0) / this.tween.duration)
-      const k = easeInOutCubic(t)
-      this.camera.position.lerpVectors(this.tween.fromPos, this.tween.toPos, k)
-      this.controls.target.lerpVectors(this.tween.fromLook, this.tween.toLook, k)
-      if (t >= 1) this.tween = null
-    }
-    this.controls.update()
+    const delta = this.clock.getDelta()
+    this.controls.update(delta)
     this.cullLabels()
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)

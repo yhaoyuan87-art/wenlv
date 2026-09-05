@@ -1,14 +1,16 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import TopNav from './components/TopNav.jsx'
 import Breadcrumb from './components/Breadcrumb.jsx'
 import InfoPanel from './components/InfoPanel.jsx'
 import PoiDrawer from './components/PoiDrawer.jsx'
 import Legend from './components/Legend.jsx'
-import CityLayer from './layers/CityLayer.jsx'
-import MetroLayer from './layers/MetroLayer.jsx'
 import PoiLayer from './layers/PoiLayer.jsx'
 import MapLayer from './layers/MapLayer.jsx'
 import { useStore, LAYERS } from './store/useStore.js'
+
+// 3D 层依赖 Three.js（体积大），按需懒加载，避免拖慢首屏
+const CityLayer = lazy(() => import('./layers/CityLayer.jsx'))
+const MetroLayer = lazy(() => import('./layers/MetroLayer.jsx'))
 
 const LAYER_VIEWS = {
   city: CityLayer,
@@ -46,7 +48,9 @@ export default function App() {
       <Breadcrumb />
       <main className="stage">
         <div key={layer} className="layer-anim layer-host">
-          <View />
+          <Suspense fallback={<div className="layer-loading">场景加载中…</div>}>
+            <View />
+          </Suspense>
         </div>
         <InfoPanel />
       </main>

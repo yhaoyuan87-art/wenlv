@@ -1,0 +1,12 @@
+{
+  "baseUrl": "/media/pois",
+  "note": "媒体资源清单：status 为 placeholder 时前端显示占位图；放入真实文件并把 status 改为 ready 即可生效。路径缺省按 baseUrl/<poiId>/ 约定生成，也可逐条覆盖。",
+  "entries": {
+    "poi-001": {
+      "status": "ready",
+      "cover": "/media/pois/poi-001/cover.jpg",
+      "video": "/media/pois/poi-001/intro.mp4",
+      "panorama": "/media/pois/poi-001/panorama.jpg"
+    }
+  }
+}
