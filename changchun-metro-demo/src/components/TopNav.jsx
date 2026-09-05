@@ -23,6 +23,8 @@ export default function TopNav() {
   const toggleLegend = useStore((s) => s.toggleLegend)
   const reduceMotion = useStore((s) => s.reduceMotion)
   const toggleReduceMotion = useStore((s) => s.toggleReduceMotion)
+  const theme = useStore((s) => s.theme)
+  const toggleTheme = useStore((s) => s.toggleTheme)
 
   const [kw, setKw] = useState('')
   const [open, setOpen] = useState(false)

@@ -6,6 +6,7 @@ import { metroLines } from '../data/metroLines.js'
 import { poisByStation } from '../data/pois.js'
 import { toXZ } from './CityScene.js'
 import { pixelRatio, fitCamera, portraitPull, observeSize, isMobile } from './adapt.js'
+import { cssVar, hexToNumber } from '../theme/theme.js'
 
 CameraControls.install({ THREE })
 
