@@ -3,3 +3,10 @@ dist/
 dev.log
 *.log
 .DS_Store
+
+# IDE 配置
+.idea/
+*.iml
+
+# PyCharm 模板脚本
+main.py
