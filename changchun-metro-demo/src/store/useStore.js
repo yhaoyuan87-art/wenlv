@@ -60,9 +60,12 @@ export const useStore = create((set, get) => ({
 
   setAppTheme(theme) {
     const t = theme === THEMES.light ? THEMES.light : THEMES.dark
-    set({ theme: t })
+    // 顺序不能颠倒：必须先切 <html> class 让 CSS 变量立即生效，再 set() 通知订阅者。
+    // 若先 set()，zustand 会同步触发订阅者读取 --scene-bg，此时 class 尚未切换，
+    // 3D 场景会取到「上一次」的主题色（表现为切换后背景仍是旧的、且一直反着）。
     applyTheme(t)
     persistTheme(t)
+    set({ theme: t })
     // 同步到 URL ?mode=，方便分享时保留主题状态（?theme= 已被路线主题占用）
     const q = new URLSearchParams(window.location.search)
     q.set('mode', t)

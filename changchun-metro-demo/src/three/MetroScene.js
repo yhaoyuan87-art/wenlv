@@ -431,7 +431,7 @@ export class MetroScene {
   setTheme() {
     const bg = this._sceneBg()
     if (this.scene.background) this.scene.background.set(bg)
-    if (this.scene.fog) this.scene.fog.color = new THREE.Color(bg)
+    if (this.scene.fog) this.scene.fog.color.set(bg)
   }
 
   setReduceMotion(v) {
