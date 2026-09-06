@@ -26,6 +26,7 @@ export default function CityLayer() {
     })
     scene.setReduceMotion(store.reduceMotion)
     scene.setTheme()
+    scene.setPanelInsets(store.panelInsets)
     if (store.districtId) scene.setSelected(store.districtId)
     sceneRef.current = scene
     return () => {
@@ -39,12 +40,17 @@ export default function CityLayer() {
     let prevToken = useStore.getState().resetViewToken
     let prevMotion = useStore.getState().reduceMotion
     let prevTheme = useStore.getState().theme
+    let prevInsets = useStore.getState().panelInsets
     const unsub = useStore.subscribe((s) => {
       const scene = sceneRef.current
       if (!scene) return
       if (s.districtId !== prev) {
         prev = s.districtId
         scene.setSelected(s.districtId)
+      }
+      if (s.panelInsets !== prevInsets) {
+        prevInsets = s.panelInsets
+        scene.setPanelInsets(s.panelInsets)
       }
       if (s.resetViewToken !== prevToken) {
         prevToken = s.resetViewToken

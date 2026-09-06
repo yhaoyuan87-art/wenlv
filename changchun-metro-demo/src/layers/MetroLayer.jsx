@@ -21,6 +21,7 @@ export default function MetroLayer() {
     })
     scene.setReduceMotion(store.reduceMotion)
     scene.setTheme()
+    scene.setPanelInsets(store.panelInsets)
     if (store.lineId) scene.highlightLine(store.lineId, store.stationId)
     if (store.stationId) scene.focusStation(store.stationId)
     sceneRef.current = scene
@@ -35,9 +36,14 @@ export default function MetroLayer() {
     let prevStation = useStore.getState().stationId
     let prevMotion = useStore.getState().reduceMotion
     let prevTheme = useStore.getState().theme
+    let prevInsets = useStore.getState().panelInsets
     const unsub = useStore.subscribe((s) => {
       const scene = sceneRef.current
       if (!scene) return
+      if (s.panelInsets !== prevInsets) {
+        prevInsets = s.panelInsets
+        scene.setPanelInsets(s.panelInsets)
+      }
       if (s.lineId !== prevLine || s.stationId !== prevStation) {
         prevLine = s.lineId
         prevStation = s.stationId

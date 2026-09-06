@@ -57,6 +57,8 @@ export const useStore = create((set, get) => ({
   categoryFilter: null,
   themeId: initial.themeId,
   mapVisibility: { districts: true, lines: true, stations: true, pois: true, labels: true },
+  // 详情面板对 3D 视野的遮挡量（px）。3D 相机据此把视觉中心移到「未被挡住的区域」中心
+  panelInsets: { right: 0, bottom: 0 },
 
   setAppTheme(theme) {
     const t = theme === THEMES.light ? THEMES.light : THEMES.dark
@@ -134,6 +136,13 @@ export const useStore = create((set, get) => ({
 
   setPoiScope(scope) {
     set({ poiScope: scope })
+  },
+
+  // 详情面板上报遮挡尺寸；值未变化时直接返回，避免重挂载造成的无谓抖动
+  setPanelInsets(next) {
+    const cur = get().panelInsets
+    if (cur.right === next.right && cur.bottom === next.bottom) return
+    set({ panelInsets: next })
   },
 
   setCategoryFilter(cat) {

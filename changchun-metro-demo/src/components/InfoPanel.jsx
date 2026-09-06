@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { getDistrict, findDistrictByPoint, cityInfo } from '../data/districts.js'
 import { metroLines, getLine, getStation, getNeighbors } from '../data/metroLines.js'
@@ -21,16 +21,48 @@ function districtStats(districtId) {
  */
 function Panel({ children }) {
   const [collapsed, setCollapsed] = useState(false)
+  const ref = useRef(null)
   const layer = useStore((s) => s.layer)
   const districtId = useStore((s) => s.districtId)
   const lineId = useStore((s) => s.lineId)
   const stationId = useStore((s) => s.stationId)
+
+  // 测量面板挡住了屏幕哪条边、挡了多少，上报给 3D 场景做「视野中心补偿」：
+  // 3D 内容会平滑滑向未被遮挡区域的中心，避免被详情面板遮住大半。
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const EDGE = 32 // 面板贴边判定阈值（px）
+    const report = () => {
+      const r = el.getBoundingClientRect()
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      if (!r.width || !r.height) return
+      // 跨度判定：右侧竖栏（不横跨全宽）才算 right 遮挡，
+      // 底部抽屉（不纵跨全高）才算 bottom 遮挡。
+      // 否则桌面浮层在矮窗口里也会顶到屏幕底边，被误判成底部遮挡。
+      const right = vw - r.right < EDGE && r.left > vw * 0.3 ? Math.round(vw - r.left) : 0
+      const bottom = vh - r.bottom < EDGE && r.top > vh * 0.3 ? Math.round(vh - r.top) : 0
+      useStore.getState().setPanelInsets({ right, bottom })
+    }
+    report()
+    const ro = new ResizeObserver(report)
+    ro.observe(el)
+    window.addEventListener('resize', report)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', report)
+      // 面板卸载/重新挂载时先清零补偿，避免残留旧偏移
+      useStore.getState().setPanelInsets({ right: 0, bottom: 0 })
+    }
+  }, [])
 
   // 用 key 重置：选中对象变化时重新挂载组件 → collapsed 自动回到展开态，
   // 避免用户收起后误以为面板没更新。比直接在 effect 里 setState 更干净。
   return (
     <aside
       key={`${layer}-${districtId || ''}-${lineId || ''}-${stationId || ''}`}
+      ref={ref}
       className={'info-panel' + (collapsed ? ' collapsed' : '')}
     >
       <button

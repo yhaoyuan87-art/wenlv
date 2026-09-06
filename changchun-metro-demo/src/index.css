@@ -42,6 +42,9 @@
   --stage-glow2: rgba(56, 225, 255, 0.08);
   --scene-bg: #0a0f1c;      /* 3D 场景背景（JS 读取同步给 three） */
   --scene-fog: #0a0f1c;
+  --scene-ground: #101828;  /* 3D 地面 */
+  --scene-grid: #22314f;    /* 3D 网格线 */
+  --scene-bounce: #1a2340;  /* 半球光地面反射色 */
   --controls-bg: rgba(10, 16, 32, 0.72);
 
   /* 顶部导航、抽屉等的遮罩/阴影 */
@@ -102,6 +105,9 @@ html.theme-light {
   --stage-glow2: rgba(80, 190, 255, 0.16);
   --scene-bg: #dfe8f8;
   --scene-fog: #dfe8f8;
+  --scene-ground: #ccd8ea;  /* 白天：地图底般的浅灰蓝，避免深黑地面与浅背景割裂 */
+  --scene-grid: #a8b8d2;
+  --scene-bounce: #93a7c6;
   --controls-bg: rgba(255, 255, 255, 0.8);
 
   --mask: rgba(23, 35, 58, 0.25);
@@ -242,7 +248,7 @@ button {
 
 .layer-tab.on {
   color: var(--text-emphasized);
-  background: linear-gradient(120deg, #45e0ff, #3d8bff);
+  background: var(--accent-grad);
   border-color: transparent;
   font-weight: 600;
   box-shadow: 0 2px 14px var(--accent-dim);
@@ -456,7 +462,7 @@ button {
   place-items: center;
   font-size: 11px;
   font-weight: 700;
-  background: rgba(120, 160, 255, 0.12);
+  background: var(--inset-bg-strong);
   transition: all 0.2s;
 }
 
@@ -1828,8 +1834,8 @@ html.theme-light .map2d-svg [id="map-grid"] path {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #38e1ff;
-  box-shadow: 0 0 8px rgba(56, 225, 255, 0.9);
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
   animation: pano-blink 2.2s ease-in-out infinite;
 }
 

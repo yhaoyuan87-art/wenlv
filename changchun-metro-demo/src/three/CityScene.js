@@ -62,6 +62,11 @@ export class CityScene {
     this.lastView = null
     this.tapHit = null
     this.landmarkHitMeshes = []
+    // 详情面板遮挡的安全区（px）与当前平滑插值值
+    this.safeRight = 0
+    this.safeBottom = 0
+    this._offX = 0
+    this._offY = 0
 
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(this._sceneBg())
@@ -92,7 +97,8 @@ export class CityScene {
     this.controls.dollyToCursor = false
     this.controls.addEventListener('controlstart', this._onUserInput)
 
-    this.scene.add(new THREE.HemisphereLight(0x8fb5ff, 0x1a2340, 0.9))
+    this.hemiLight = new THREE.HemisphereLight(0x8fb5ff, 0x1a2340, 0.9)
+    this.scene.add(this.hemiLight)
     const dir = new THREE.DirectionalLight(0xffffff, 1.1)
     dir.position.set(300, 500, 200)
     this.scene.add(dir)
@@ -136,8 +142,10 @@ export class CityScene {
     mesh.rotation.x = -Math.PI / 2
     mesh.position.y = -1
     this.scene.add(mesh)
+    this.groundMat = m
 
     const grid = new THREE.GridHelper(2200, 44, 0x22314f, 0x182238)
+    this.gridHelper = grid
     grid.position.y = 0.5
     this.scene.add(grid)
   }
@@ -461,11 +469,48 @@ export class CityScene {
     return hexToNumber(hex, 0x0a0f1c)
   }
 
-  /** 主题切换：同步场景背景与雾，视觉无缝过渡 */
+  /** 主题切换：同步场景背景、雾、地面、网格与灯光反射色 */
   setTheme() {
     const bg = this._sceneBg()
     if (this.scene.background) this.scene.background.set(bg)
     if (this.scene.fog) this.scene.fog.color.set(bg)
+    // 地面 / 网格 / 半球光反射：深色地面在浅色主题下会与背景严重割裂，需一并切换
+    if (this.groundMat) this.groundMat.color.set(hexToNumber(cssVar('--scene-ground'), 0x101828))
+    if (this.gridHelper) {
+      this.gridHelper.material.color.set(hexToNumber(cssVar('--scene-grid'), 0x22314f))
+    }
+    if (this.hemiLight) {
+      this.hemiLight.groundColor.set(hexToNumber(cssVar('--scene-bounce'), 0x1a2340))
+    }
+  }
+
+  /** 详情面板遮挡补偿：上报被面板挡住的右/下边缘宽度（px），取景中心会平滑滑向未遮挡区域 */
+  setPanelInsets(insets) {
+    this.safeRight = Math.max(0, insets?.right || 0)
+    this.safeBottom = Math.max(0, insets?.bottom || 0)
+  }
+
+  /**
+   * 每帧把视野中心朝目标偏移做插值（setViewOffset 的 offsetX/Y 与遮挡宽度成正比）：
+   * 正 offsetX → 内容在屏幕上左移（右侧面板遮挡时），正 offsetY → 内容上移（底部抽屉遮挡时）。
+   * 用视锥平移而不是移动相机，用户手动环绕/缩放的手感完全不受影响。
+   */
+  _updateViewOffset(delta) {
+    const targetX = this.safeRight / 2
+    const targetY = this.safeBottom / 2
+    const k = Math.min(1, delta * 6)
+    this._offX += (targetX - this._offX) * k
+    this._offY += (targetY - this._offY) * k
+    if (Math.abs(this._offX) < 0.5 && Math.abs(this._offY) < 0.5) {
+      this._offX = 0
+      this._offY = 0
+      if (this.camera.view && this.camera.view.enabled) this.camera.clearViewOffset()
+      return
+    }
+    const w = this.container.clientWidth
+    const h = this.container.clientHeight
+    if (!w || !h) return
+    this.camera.setViewOffset(w, h, this._offX, this._offY, w, h)
   }
 
   setReduceMotion(v) {
@@ -496,6 +541,7 @@ export class CityScene {
     requestAnimationFrame(this.animate)
     const delta = this.clock.getDelta()
     this.controls.update(delta)
+    this._updateViewOffset(delta)
     if (!this.reduceMotion && this.landmarkMeshes) {
       const t = performance.now() / 1000
       for (const m of this.landmarkMeshes) {
