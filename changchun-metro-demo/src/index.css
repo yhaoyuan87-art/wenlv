@@ -16,6 +16,7 @@
   --muted-soft: rgba(142, 160, 192, 0.5); /* 面包屑分隔符等弱化文字 */
   --accent: #38e1ff;
   --accent-dim: rgba(56, 225, 255, 0.14);
+  --accent-grad: linear-gradient(120deg, #45e0ff, #3d8bff); /* 夜间：亮青→蓝，配 --text-emphasized 深字 */
   --warm: #ffb457;
 
   /* 语义化：面板内嵌卡片、浅色填充底、浅色文字底 */
@@ -257,6 +258,12 @@ button {
 .layer-tab.on em {
   background: rgba(255, 255, 255, 0.3);
   color: var(--text-emphasized);
+}
+
+/* 白天主题：激活 Tab 的数字徽标改用深蓝实底，否则白 30% 叠底上白字对比不足 */
+html.theme-light .layer-tab.on em {
+  background: var(--accent);
+  color: var(--on-accent-text);
 }
 
 .nav-right {
@@ -2506,7 +2513,7 @@ html.theme-light .map2d-svg [id="map-grid"] path {
     color: var(--muted);
   }
   .layer-tab.on:hover {
-    color: #06121f;
+    color: var(--text-emphasized); /* 触屏 hover 复位：跟随主题，白天是白字、夜间是深字 */
     border-color: transparent;
   }
   .chip.on:hover {
