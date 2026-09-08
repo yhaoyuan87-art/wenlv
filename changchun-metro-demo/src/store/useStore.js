@@ -34,6 +34,10 @@ function syncQuery(state) {
   if (state.stationId) q.set('station', state.stationId)
   if (state.poiId) q.set('poi', state.poiId)
   if (state.themeId) q.set('theme', state.themeId)
+  // 原样保留 ?nowebgl=1（强制 WebGL 降级态的演示/自测开关，见 three/webgl.js），
+  // 否则切一次层就会把它从 URL 里抹掉。
+  const nowebgl = new URLSearchParams(window.location.search).get('nowebgl')
+  if (nowebgl) q.set('nowebgl', nowebgl)
   window.history.replaceState(null, '', `?${q.toString()}`)
 }
 
@@ -59,6 +63,8 @@ export const useStore = create((set, get) => ({
   mapVisibility: { districts: true, lines: true, stations: true, pois: true, labels: true },
   // 详情面板对 3D 视野的遮挡量（px）。3D 相机据此把视觉中心移到「未被挡住的区域」中心
   panelInsets: { right: 0, bottom: 0 },
+  // 3D 层处于 WebGL 降级态：详情面板据此让位，避免遮挡兜底卡片
+  webglUnsupported: false,
 
   setAppTheme(theme) {
     const t = theme === THEMES.light ? THEMES.light : THEMES.dark
@@ -143,6 +149,16 @@ export const useStore = create((set, get) => ({
     const cur = get().panelInsets
     if (cur.right === next.right && cur.bottom === next.bottom) return
     set({ panelInsets: next })
+  },
+
+  /**
+   * 标记 3D 层是否处于 WebGL 降级态。
+   * 降级时详情面板不再渲染（它会盖住兜底卡片），同时停止上报遮挡补偿。
+   * @param {boolean} v
+   */
+  setWebglUnsupported(v) {
+    if (get().webglUnsupported === v) return
+    set({ webglUnsupported: v })
   },
 
   setCategoryFilter(cat) {

@@ -2086,28 +2086,9 @@ html.theme-light .map2d-svg [id="map-grid"] path {
     display: inline-block;
   }
 
-  /* ---- 搜索：折叠为图标，激活后铺满顶栏 ---- */
+  /* ---- 搜索：折叠为图标，激活后（.search-box.is-open）铺满顶栏 ---- */
   .search-box {
     display: none;
-  }
-
-  .topnav.searching .search-box {
-    display: flex;
-    position: absolute;
-    inset: var(--safe-t) 0 0 0;
-    align-items: center;
-    gap: 8px;
-    padding: 0 10px;
-    background: var(--bg2);
-    z-index: 5;
-  }
-
-  .topnav.searching .search-box input {
-    width: auto;
-    flex: 1;
-    min-width: 0;
-    padding: 8px 14px;
-    font-size: 16px; /* ≥16px 可阻止 iOS 聚焦时自动放大页面 */
   }
 
   .search-cancel {
@@ -2572,5 +2553,152 @@ html.theme-light .map2d-svg [id="map-grid"] path {
   .legend-panel,
   .bottom-nav {
     animation: none;
+  }
+}
+
+/* ===================== 全局搜索（SearchBox） =====================
+   桌面端常驻输入框；手机端（≤720px）折叠为「搜索」按钮，展开后铺满顶栏。 */
+.search-box {
+  display: flex;
+  align-items: center;
+}
+
+/* 结果按类型分组，组间用一条细分隔线 */
+.search-group + .search-group {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.search-group-title {
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+/* 类型徽标：分区 / 线路 / 站点 / 景点 */
+.search-badge {
+  flex: none;
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1.7;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--inset-bg-strong);
+  color: var(--muted);
+}
+
+.search-pop.empty {
+  font-size: 13px;
+}
+
+/* ===================== WebGL 降级卡片 =====================
+   不支持 WebGL / 渲染器创建失败时替代 3D 场景，避免白屏。 */
+.webgl-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.fallback-card {
+  width: min(420px, 100%);
+  padding: 22px 22px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.fallback-icon {
+  display: block;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.fallback-card h3 {
+  margin: 4px 0 6px;
+  font-size: 16px;
+}
+
+.fallback-card p {
+  margin: 8px 0 0;
+}
+
+.fallback-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fallback-tip {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ===================== 快捷键提示（面包屑右侧） ===================== */
+.hotkey-hint {
+  margin: 0 0 0 auto;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.hotkey-hint b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ===================== 键盘可访问性：统一焦点环 =====================
+   outline 会自动跟随元素自身的 border-radius，因此不需要额外设置圆角。 */
+:focus-visible,
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 搜索框鼠标聚焦时靠边框高亮（outline:none），键盘聚焦时补回轮廓 */
+.search-box input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ===================== 移动端：搜索展开态 ===================== */
+@media (max-width: 720px) {
+  /* 小屏空间紧张，快捷键提示直接隐藏 */
+  .hotkey-hint {
+    display: none;
+  }
+
+  .search-box {
+    display: none;
+  }
+
+  .search-box.is-open {
+    display: flex;
+    position: absolute;
+    inset: var(--safe-t) 0 0 0;
+    gap: 8px;
+    padding: 0 10px;
+    background: var(--bg2);
+    z-index: 5;
+  }
+
+  .search-box.is-open input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    font-size: 16px; /* ≥16px 可阻止 iOS 聚焦时自动放大页面 */
   }
 }

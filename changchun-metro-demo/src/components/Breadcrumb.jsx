@@ -35,6 +35,10 @@ export default function Breadcrumb() {
           ← 返回上一级
         </button>
       )}
+      {/* 快捷键提示：桌面端常驻（CSS 里 ≤720px 隐藏），不占交互位 */}
+      <p className="hotkey-hint">
+        快捷键：<b>1–4</b> 切层 · <b>Esc</b> 关闭 · <b>⌘K</b> 搜索
+      </p>
     </div>
   )
 }

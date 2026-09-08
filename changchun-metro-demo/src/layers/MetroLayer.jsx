@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { MetroScene } from '../three/MetroScene.js'
+import { shouldFallback3D } from '../three/webgl.js'
+import WebGLFallback from '../components/WebGLFallback.jsx'
 import { useStore } from '../store/useStore.js'
 
 const VIEWS = [
@@ -12,24 +14,50 @@ export default function MetroLayer() {
   const hostRef = useRef(null)
   const sceneRef = useRef(null)
   const [view, setView] = useState('pano')
+  // WebGL 不可用（或 ?nowebgl=1 强制）时不构造 3D 场景，直接渲染兜底 UI
+  const [unsupported, setUnsupported] = useState(() => shouldFallback3D())
 
   useEffect(() => {
+    if (unsupported) return undefined
     const store = useStore.getState()
-    const scene = new MetroScene(hostRef.current, {
-      onSelectStation: (stationId) => useStore.getState().selectStation(stationId),
-      onSelectLine: (lineId) => useStore.getState().selectLine(lineId)
-    })
-    scene.setReduceMotion(store.reduceMotion)
-    scene.setTheme()
-    scene.setPanelInsets(store.panelInsets)
-    if (store.lineId) scene.highlightLine(store.lineId, store.stationId)
-    if (store.stationId) scene.focusStation(store.stationId)
+    let scene = null
+    try {
+      scene = new MetroScene(hostRef.current, {
+        onSelectStation: (stationId) => useStore.getState().selectStation(stationId),
+        onSelectLine: (lineId) => useStore.getState().selectLine(lineId)
+      })
+      scene.setReduceMotion(store.reduceMotion)
+      scene.setTheme()
+      scene.setPanelInsets(store.panelInsets)
+      if (store.lineId) scene.highlightLine(store.lineId, store.stationId)
+      if (store.stationId) scene.focusStation(store.stationId)
+    } catch (err) {
+      // 创建渲染器 / 场景抛错时同样走兜底，避免整页白屏
+      console.error('[MetroLayer] 3D 场景初始化失败，已降级为提示卡片', err)
+      if (scene) {
+        try {
+          scene.dispose()
+        } catch {
+          /* 忽略：构造已失败，析构异常无需处理 */
+        }
+      }
+      // 用微任务异步切换：不在 effect 里同步 setState，避免触发级联渲染
+      queueMicrotask(() => setUnsupported(true))
+      return undefined
+    }
     sceneRef.current = scene
     return () => {
       scene.dispose()
       sceneRef.current = null
     }
-  }, [])
+  }, [unsupported])
+
+  // 降级态同步到 store：详情面板会让位，否则在 ≤900px 断点它会盖住整个兜底卡片
+  useEffect(() => {
+    if (!unsupported) return undefined
+    useStore.getState().setWebglUnsupported(true)
+    return () => useStore.getState().setWebglUnsupported(false)
+  }, [unsupported])
 
   useEffect(() => {
     let prevLine = useStore.getState().lineId
@@ -70,6 +98,8 @@ export default function MetroLayer() {
     if (mode === 'top') scene.topView()
     else scene.resetView()
   }
+
+  if (unsupported) return <WebGLFallback layer="metro" />
 
   return (
     <div className="three-host" ref={hostRef}>

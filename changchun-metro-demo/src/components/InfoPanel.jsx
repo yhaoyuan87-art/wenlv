@@ -90,8 +90,13 @@ export default function InfoPanel() {
   const selectStation = useStore((s) => s.selectStation)
   const selectLine = useStore((s) => s.selectLine)
   const resetViewToken = useStore((s) => s.resetViewToken)
+  const webglUnsupported = useStore((s) => s.webglUnsupported)
 
   void resetViewToken
+
+  // 3D 降级态：面板在 ≤900px 会变成占满宽度的底栏，会把兜底卡片整个盖住，
+  // 这里直接让位（Panel 卸载时也会把 panelInsets 清零，停止遮挡补偿）。
+  if (webglUnsupported) return null
 
   if (layer === 'poi') return null
 
