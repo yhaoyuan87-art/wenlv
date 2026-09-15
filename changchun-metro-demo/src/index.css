@@ -713,7 +713,9 @@ html.theme-light .layer-tab.on em {
 
 .metro-station-label.transfer {
   border-color: var(--station-transfer-border);
-  color: var(--inverse-text);
+  color: var(--station-label-text);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--station-transfer-border), 0 2px 8px rgba(20, 40, 90, 0.12);
 }
 
 .metro-station-label.selected {
@@ -727,7 +729,7 @@ html.theme-light .layer-tab.on em {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--inverse-text) 0%, #9fd8ff 60%, transparent 100%);
+  background: radial-gradient(circle, var(--accent) 0%, #9fd8ff 70%, transparent 100%);
   display: inline-block;
 }
 

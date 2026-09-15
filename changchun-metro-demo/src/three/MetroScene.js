@@ -171,8 +171,6 @@ export class MetroScene {
         const { X, Z } = toXZ(s.x, s.y)
         return new THREE.Vector3(X, liftY, Z)
       })
-      const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.08)
-      const tubeGeo = new THREE.TubeGeometry(curve, pts.length * 6, 1.1, 8, false)
       const tubeMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(line.color),
         emissive: new THREE.Color(line.color).multiplyScalar(0.45),
@@ -181,9 +179,33 @@ export class MetroScene {
         transparent: true,
         opacity: 0.96
       })
-      const tube = new THREE.Mesh(tubeGeo, tubeMat)
-      tube.userData = { type: 'line', lineId: line.lineId }
-      group.add(tube)
+      // 用「逐段圆柱 + 关节球」代替 TubeGeometry：
+      // TubeGeometry 在折线拐角处的 Frenet 框架插值会把管体甩离站点柱体（对不上），
+      // 圆柱端点严格落在站点坐标上，球体盖住接缝，任何转角都严丝合缝。
+      const lineMeshes = []
+      const UP = new THREE.Vector3(0, 1, 0)
+      for (let i = 1; i < pts.length; i += 1) {
+        const a = pts[i - 1]
+        const b = pts[i]
+        const dir = new THREE.Vector3().subVectors(b, a)
+        const len = dir.length()
+        if (len < 0.001) continue
+        const segGeo = new THREE.CylinderGeometry(1.1, 1.1, len, 8, 1, false)
+        const seg = new THREE.Mesh(segGeo, tubeMat)
+        seg.position.copy(a).addScaledVector(dir, 0.5)
+        seg.quaternion.setFromUnitVectors(UP, dir.clone().normalize())
+        seg.userData = { type: 'line', lineId: line.lineId }
+        group.add(seg)
+        lineMeshes.push(seg)
+      }
+      const jointGeo = new THREE.SphereGeometry(1.15, 10, 8)
+      for (const p of pts) {
+        const joint = new THREE.Mesh(jointGeo, tubeMat)
+        joint.position.copy(p)
+        joint.userData = { type: 'line', lineId: line.lineId }
+        group.add(joint)
+        lineMeshes.push(joint)
+      }
 
       const stationMeshes = []
       for (const s of line.stations) {
@@ -249,7 +271,7 @@ export class MetroScene {
       }
 
       this.scene.add(group)
-      this.lineEntries[line.lineId] = { group, tubeMat, stationMeshes, liftY }
+      this.lineEntries[line.lineId] = { group, tubeMat, stationMeshes, liftY, lineMeshes }
     })
   }
 
@@ -290,7 +312,7 @@ export class MetroScene {
   pick() {
     this.raycaster.setFromCamera(this.pointer, this.camera)
     const targets = [...this.stationHitMeshes]
-    for (const lid in this.lineEntries) targets.push(this.lineEntries[lid].tubeMat ? this.lineEntries[lid].group.children[0] : null)
+    for (const lid in this.lineEntries) targets.push(...this.lineEntries[lid].lineMeshes)
     const hits = this.raycaster.intersectObjects(targets.filter(Boolean), false)
     return hits.length ? hits[0].object : null
   }
