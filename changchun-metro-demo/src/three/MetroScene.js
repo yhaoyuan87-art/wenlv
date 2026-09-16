@@ -170,8 +170,10 @@ export class MetroScene {
       const shape = new THREE.Shape()
       d.polygon.forEach(([x, y], i) => {
         const { X, Z } = toXZ(x, y)
-        if (i === 0) shape.moveTo(X, Z)
-        else shape.lineTo(X, Z)
+        // rotation.x = -π/2 会把形状 Y 映射到世界 -Z；这里取 -Z 保持与
+        // 站点/线路/标签（+Z）同一坐标系，否则地面区划会南北镜像（与城市 3D 相反）
+        if (i === 0) shape.moveTo(X, -Z)
+        else shape.lineTo(X, -Z)
       })
       const geo = new THREE.ShapeGeometry(shape)
       const mat = new THREE.MeshBasicMaterial({
