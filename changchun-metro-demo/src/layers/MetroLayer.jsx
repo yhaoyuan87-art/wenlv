@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MetroScene } from '../three/MetroScene.js'
 import { shouldFallback3D } from '../three/webgl.js'
 import WebGLFallback from '../components/WebGLFallback.jsx'
 import { useStore } from '../store/useStore.js'
+import { buildChainRoute, findRoute, stationOptions } from '../data/routePlanner.js'
+import { getTheme, themePois } from '../data/themes.js'
 
 const VIEWS = [
   { id: 'pano', label: '全景' },
@@ -17,20 +19,117 @@ export default function MetroLayer() {
   // WebGL 不可用（或 ?nowebgl=1 强制）时不构造 3D 场景，直接渲染兜底 UI
   const [unsupported, setUnsupported] = useState(() => shouldFallback3D())
 
+  // ---- 路径规划 / 跟随 / 主题一日线的 UI 状态 ----
+  const themeId = useStore((s) => s.themeId)
+  const themeMeta = useMemo(() => (themeId ? getTheme(themeId) : null), [themeId])
+  const [plannerOpen, setPlannerOpen] = useState(false)
+  const [originId, setOriginId] = useState(null)
+  const [destId, setDestId] = useState(null)
+  const [route, setRoute] = useState(null)
+  const [follow, setFollow] = useState(false)
+  // 主题路线纯派生：景点站串联（相邻段 findRoute + 同线合并），无需 effect/state
+  const themeRoute = useMemo(() => {
+    if (!themeMeta) return null
+    const stationIds = themePois(themeMeta.themeId)
+      .map((p) => p.stationIds?.[0])
+      .filter(Boolean)
+    return buildChainRoute(stationIds, themeMeta.color)
+  }, [themeMeta])
+  // 场景回调与 zustand 订阅是「 render 外」的入口，读不到最新 state 闭包，
+  // 用一个快照 ref 在 effect 里同步（不违反 render 期间不可写 ref 的约束）
+  const latestRef = useRef({ open: false, origin: null, dest: null, route: null, themeRoute: null })
+  useEffect(() => {
+    latestRef.current = { open: plannerOpen, origin: originId, dest: destId, route, themeRoute }
+  }, [plannerOpen, originId, destId, route, themeRoute])
+
+  const options = useMemo(() => stationOptions(), [])
+
+  // follow 态不镜像成 ref：场景上的 followTrain 本身就是真相源
+  const isFollowing = () => !!sceneRef.current?.followTrain
+
+  /**
+   * 统一路线上屏入口，优先级：规划路线 > 主题一日线 > 清空。
+   * 传 plannerRoute 用于「本轮 setState 还没进 ref」的同步调用场景。
+   */
+  const showActiveRoute = (plannerRoute) => {
+    const scene = sceneRef.current
+    if (!scene) return
+    const active = plannerRoute !== undefined ? plannerRoute : latestRef.current.route
+    const target = active || latestRef.current.themeRoute
+    if (target) scene.showRoute(target)
+    else scene.clearRoute()
+  }
+
+  // 主题路线变化（含清空）→ 重上屏（规划路线仍在时自动让位）
+  useEffect(() => {
+    showActiveRoute()
+  }, [themeRoute])
+
+  /** 把 3D 点击的站点填进起/终点：无起点→起点；已有双点→重设起点 */
+  const pickPlannerStation = (stationId) => {
+    const { origin, dest } = latestRef.current
+    if (!origin || (origin && dest)) {
+      setOriginId(stationId)
+      setDestId(null)
+      setRoute(null)
+      showActiveRoute(null)
+      return
+    }
+    if (stationId === origin) return
+    setDestId(stationId)
+    const r = findRoute(origin, stationId)
+    setRoute(r)
+    showActiveRoute(r)
+  }
+
+  /** 由下拉框改动触发：双点齐了就算路，否则清掉旧路线 */
+  const applyRoute = (o, d) => {
+    const r = o && d ? findRoute(o, d) : null
+    setRoute(r)
+    showActiveRoute(r)
+  }
+
+  const swapRoute = () => {
+    if (!originId || !destId) return
+    setOriginId(destId)
+    setDestId(originId)
+    applyRoute(destId, originId)
+  }
+
+  const clearPlanner = () => {
+    setOriginId(null)
+    setDestId(null)
+    setRoute(null)
+    showActiveRoute(null) // 规划清掉后，主题一日线若仍选中会自动回归
+  }
+
+  const closePlanner = () => {
+    setPlannerOpen(false)
+    clearPlanner()
+  }
+
   useEffect(() => {
     if (unsupported) return undefined
     const store = useStore.getState()
     let scene = null
     try {
       scene = new MetroScene(hostRef.current, {
-        onSelectStation: (stationId) => useStore.getState().selectStation(stationId),
-        onSelectLine: (lineId) => useStore.getState().selectLine(lineId)
+        onSelectStation: (stationId) => {
+          // 规划面板开着：点击 3D 站点 = 快速选点；否则走常规「选中站点」链路
+          if (latestRef.current.open) pickPlannerStation(stationId)
+          else useStore.getState().selectStation(stationId)
+        },
+        onSelectLine: (lineId) => useStore.getState().selectLine(lineId),
+        onFollowChange: (v) => setFollow(v)
       })
       scene.setReduceMotion(store.reduceMotion)
       scene.setTheme()
       scene.setPanelInsets(store.panelInsets)
       if (store.lineId) scene.highlightLine(store.lineId, store.stationId)
       if (store.stationId) scene.focusStation(store.stationId)
+      // 挂载时已有激活路线（带 ?theme= 直进 / 规划态残留）则立即上屏
+      const activeRoute = latestRef.current.route || latestRef.current.themeRoute
+      if (activeRoute) scene.showRoute(activeRoute)
     } catch (err) {
       // 创建渲染器 / 场景抛错时同样走兜底，避免整页白屏
       console.error('[MetroLayer] 3D 场景初始化失败，已降级为提示卡片', err)
@@ -75,6 +174,14 @@ export default function MetroLayer() {
       if (s.lineId !== prevLine || s.stationId !== prevStation) {
         prevLine = s.lineId
         prevStation = s.stationId
+        // 常规选中链路与规划/跟随互斥：只清规划路线（主题一日线保留），再走聚焦
+        if (latestRef.current.route || isFollowing()) {
+          scene.exitFollow()
+          if (latestRef.current.route) {
+            setRoute(null)
+            showActiveRoute(null)
+          }
+        }
         scene.highlightLine(s.lineId, s.stationId)
         if (s.stationId) scene.focusStation(s.stationId)
         else if (s.lineId) scene.focusLine(s.lineId)
@@ -91,6 +198,19 @@ export default function MetroLayer() {
     return unsub
   }, [])
 
+  // ESC 退出跟随（抽屉 / 图例的 ESC 由 App 层处理，互不冲突）
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      sceneRef.current?.exitFollow()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // 组件卸载时把跟随态复位（下次进层是全新场景，无需额外处理）
+  useEffect(() => () => setFollow(false), [])
+
   const setCamera = (mode) => {
     const scene = sceneRef.current
     if (!scene) return
@@ -100,6 +220,17 @@ export default function MetroLayer() {
   }
 
   if (unsupported) return <WebGLFallback layer="metro" />
+
+  const renderStationOptions = () =>
+    options.map((g) => (
+      <optgroup key={g.lineId} label={g.shortName}>
+        {g.stations.map((st) => (
+          <option key={st.stationId} value={st.stationId}>
+            {st.name}
+          </option>
+        ))}
+      </optgroup>
+    ))
 
   return (
     <div className="three-host" ref={hostRef}>
@@ -113,7 +244,127 @@ export default function MetroLayer() {
             {v.label}
           </button>
         ))}
+        <button className={'view-btn' + (plannerOpen ? ' on' : '')} onClick={() => (plannerOpen ? closePlanner() : setPlannerOpen(true))}>
+          规划
+        </button>
       </div>
+
+      {plannerOpen && (
+        <div className="route-planner">
+          <div className="route-planner-head">
+            <b>站到站路径规划</b>
+            <button className="route-close" onClick={closePlanner} aria-label="关闭路径规划">
+              ×
+            </button>
+          </div>
+          <div className="route-fields">
+            <select
+              className="route-select"
+              value={originId || ''}
+              onChange={(e) => {
+                const v = e.target.value || null
+                setOriginId(v)
+                applyRoute(v, destId)
+              }}
+            >
+              <option value="" disabled>
+                选择起点
+              </option>
+              {renderStationOptions()}
+            </select>
+            <button className="route-swap" onClick={swapRoute} disabled={!originId || !destId} title="交换起终点">
+              交换
+            </button>
+            <select
+              className="route-select"
+              value={destId || ''}
+              onChange={(e) => {
+                const v = e.target.value || null
+                setDestId(v)
+                applyRoute(originId, v)
+              }}
+            >
+              <option value="" disabled>
+                选择终点
+              </option>
+              {renderStationOptions()}
+            </select>
+          </div>
+          <p className="route-hint">提示：开启规划后，直接点击 3D 站点也能依次设为起、终点</p>
+        </div>
+      )}
+
+      {route && (
+        <div className="route-card">
+          <div className="route-card-head">
+            <b>行程方案</b>
+            <span className="route-sum">
+              约 {route.minutes} 分钟 · {route.stops} 站 · 换乘 {route.transfers} 次
+            </span>
+            <button className="route-mini-btn" onClick={clearPlanner}>
+              清除
+            </button>
+          </div>
+          <div className="route-steps">
+            {route.segments.map((seg, i) => (
+              <div key={seg.lineId + i}>
+                {i > 0 &&
+                  (seg.lineId !== route.segments[i - 1].lineId ? (
+                    <div className="route-transfer">在 {seg.boardName} 站内换乘</div>
+                  ) : (
+                    <div className="route-back">在 {seg.boardName} 原线折返</div>
+                  ))}
+                <div className="route-seg">
+                  <span className="route-badge" style={{ background: seg.color }}>
+                    {seg.shortName.replace('号线', '')}
+                  </span>
+                  <div className="route-seg-main">
+                    <b>
+                      {seg.boardName} → {seg.alightName}
+                    </b>
+                    <span>
+                      开往 {seg.toward} 方向 · 乘坐 {seg.stops} 站
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!route && themeRoute && themeMeta && (
+        <div className="route-card theme-card-mini" style={{ borderColor: themeMeta.color }}>
+          <div className="route-card-head">
+            <b style={{ color: themeMeta.color }}>{themeMeta.name}</b>
+            <span className="route-sum">
+              {themeMeta.poiIds.length} 个景点 · 约 {themeRoute.minutes} 分钟 · 换乘 {themeRoute.transfers} 次
+            </span>
+            <button className="route-mini-btn" onClick={() => useStore.getState().setTheme(null)}>
+              退出主题
+            </button>
+          </div>
+          <p className="theme-mini-summary">{themeMeta.summary}</p>
+          <div className="theme-mini-stops">
+            {themeRoute.markers.map((mk, i) => {
+              const st = themeRoute.stations.find((x) => x.stationId === mk.stationId)
+              return (
+                <span key={mk.stationId + i} className="theme-mini-stop">
+                  <i style={{ background: themeMeta.color }}>{mk.text}</i>
+                  {st ? st.name : ''}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {follow && (
+        <button className="follow-chip" onClick={() => sceneRef.current?.exitFollow()}>
+          <i />
+          跟随列车中 · 点击画面或按 ESC 退出
+        </button>
+      )}
     </div>
   )
 }

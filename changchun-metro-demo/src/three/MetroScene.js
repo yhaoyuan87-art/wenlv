@@ -10,6 +10,11 @@ import { cssVar, hexToNumber } from '../theme/theme.js'
 
 CameraControls.install({ THREE })
 
+const UP_Y = new THREE.Vector3(0, 1, 0)
+const PLUS_Z = new THREE.Vector3(0, 0, 1)
+/** 三节编组的车厢中心间距（弧长偏移，含 0.5 车厢间隙） */
+const CAR_SPACING = 5.6
+
 export class MetroScene {
   constructor(container, callbacks) {
     this.container = container
@@ -29,6 +34,19 @@ export class MetroScene {
     this.labelCandidates = []
     this.labelSemantic = {}
     this.groundMats = []
+
+    // ---- 列车模拟 ----
+    this.trains = []
+    this.trainBodies = []
+    this.stationMeshById = {}
+    this.pulses = [] // 进站脉冲 { mesh, base, ttl, dur }
+    // ---- 列车跟随镜头 ----
+    this.followTrain = null
+    this._followLook = new THREE.Vector3()
+    // ---- 路径规划叠加层 ----
+    this.route = null
+    this.routeLineIds = null
+    this.elapsed = 0
 
     this._onPointerDown = this.onPointerDown.bind(this)
     this._onPointerMove = this.onPointerMove.bind(this)
@@ -86,6 +104,7 @@ export class MetroScene {
 
     this.buildGround()
     this.buildLines()
+    this.buildTrains()
     this.updateLabels(null, null)
 
     this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown)
@@ -171,6 +190,10 @@ export class MetroScene {
         const { X, Z } = toXZ(s.x, s.y)
         return new THREE.Vector3(X, liftY, Z)
       })
+      // 折线参数化：累计弧长表（列车巡航 / 路径流光共用同一套采样）
+      const cum = [0]
+      for (let i = 1; i < pts.length; i += 1) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]))
+      const stationIndexById = {}
       const tubeMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(line.color),
         emissive: new THREE.Color(line.color).multiplyScalar(0.45),
@@ -208,7 +231,8 @@ export class MetroScene {
       }
 
       const stationMeshes = []
-      for (const s of line.stations) {
+      line.stations.forEach((s, si) => {
+        stationIndexById[s.stationId] = si
         const { X, Z } = toXZ(s.x, s.y)
         const isTransfer = (s.transfer || []).length > 0
         const size = isTransfer ? 3.2 : 2.2
@@ -226,6 +250,7 @@ export class MetroScene {
         group.add(mesh)
         stationMeshes.push(mesh)
         this.stationMeshes.push(mesh)
+        this.stationMeshById[s.stationId] = mesh
 
         // 触摸热区：站点柱体半径只有 2.2（屏幕上约 3px），手指根本点不中；
         // 叠一个不可见的大判定球（material.visible=false → 不渲染，但可被 raycast 命中）
@@ -268,14 +293,257 @@ export class MetroScene {
           w: 0,
           h: 0
         })
-      }
+      })
 
       this.scene.add(group)
-      this.lineEntries[line.lineId] = { group, tubeMat, stationMeshes, liftY, lineMeshes }
+      this.lineEntries[line.lineId] = {
+        group,
+        tubeMat,
+        stationMeshes,
+        liftY,
+        lineMeshes,
+        pts,
+        cum,
+        total: cum[cum.length - 1],
+        stationIndexById,
+        line
+      }
     })
   }
 
+  /**
+   * 三节编组列车：铰接式过弯（每节车独立沿轨采样，弯道不切角），
+   * 车窗灯带 + 头灯/红灯 + 车底光晕；几何全局共享一份，材质按线共享以便整线同步明暗。
+   */
+  buildTrains() {
+    const CAR = { radius: 1.25, len: 2.6 } // 胶囊车体：总长 len + 2*radius
+    const bodyGeo = new THREE.CapsuleGeometry(CAR.radius, CAR.len, 6, 12)
+    bodyGeo.rotateX(Math.PI / 2) // 车体轴向转到 +Z，与行进切线对齐
+    const winGeo = new THREE.BoxGeometry(2.72, 0.62, CAR.len + 0.4) // 比车体直径略宽，侧面露出灯带
+    const glowGeo = new THREE.CircleGeometry(2.3, 20)
+    glowGeo.rotateX(-Math.PI / 2)
+    const lightGeo = new THREE.SphereGeometry(0.55, 8, 8)
+    this.trainBodies = []
+    for (const line of metroLines) {
+      const entry = this.lineEntries[line.lineId]
+      if (!entry) continue
+      const trainMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(line.color),
+        emissive: new THREE.Color(line.color).multiplyScalar(0.75),
+        emissiveIntensity: 1.05,
+        roughness: 0.3,
+        metalness: 0.25,
+        transparent: true
+      })
+      const windowMat = new THREE.MeshBasicMaterial({ color: 0xd9edff, transparent: true, opacity: 0.92 })
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(line.color),
+        transparent: true,
+        opacity: 0.22,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      })
+      const headMat = new THREE.MeshBasicMaterial({ color: 0xfff3cf, transparent: true })
+      const tailMat = new THREE.MeshBasicMaterial({ color: 0xff5a3c, transparent: true })
+      entry.trainMat = trainMat
+      entry.windowMat = windowMat
+      entry.glowMat = glowMat
+      entry.headMat = headMat
+      entry.tailMat = tailMat
+      for (let k = 0; k < 2; k += 1) {
+        const cars = []
+        for (let c = 0; c < 3; c += 1) {
+          const car = new THREE.Group()
+          const body = new THREE.Mesh(bodyGeo, trainMat)
+          car.add(body)
+          car.add(new THREE.Mesh(winGeo, windowMat))
+          const glow = new THREE.Mesh(glowGeo, glowMat)
+          glow.position.y = -0.6 // 悬在轨道管上方的柔光晕
+          car.add(glow)
+          if (c === 0) {
+            const head = new THREE.Mesh(lightGeo, headMat)
+            head.position.z = CAR.len / 2 + CAR.radius
+            car.add(head)
+          }
+          if (c === 2) {
+            const tail = new THREE.Mesh(lightGeo, tailMat)
+            tail.position.z = -(CAR.len / 2 + CAR.radius)
+            car.add(tail)
+          }
+          body.userData = { type: 'train', lineId: line.lineId }
+          this.trainBodies.push(body)
+          this.scene.add(car)
+          cars.push({ car, body })
+        }
+        const train = {
+          lineId: line.lineId,
+          dir: k === 0 ? 1 : -1,
+          s: entry.total * (k === 0 ? 0.1 : 0.55),
+          v: 0,
+          cruise: 34,
+          dwell: k * 0.4,
+          cars
+        }
+        cars[0].body.userData.train = train
+        cars[1].body.userData.train = train
+        cars[2].body.userData.train = train
+        train.nextIdx = train.dir > 0 ? 1 : entry.cum.length - 2
+        this.trains.push(train)
+      }
+    }
+  }
+
+  /** 折线上按弧长取点：返回位置与切线（列车 / 跟随镜头 / 流光粒子共用） */
+  _sample(pts, cum, s) {
+    const total = cum[cum.length - 1]
+    const t = THREE.MathUtils.clamp(s, 0, total)
+    let i = 1
+    while (i < cum.length - 1 && cum[i] < t) i += 1
+    const segLen = cum[i] - cum[i - 1] || 1
+    const k = (t - cum[i - 1]) / segLen
+    return {
+      pos: new THREE.Vector3().lerpVectors(pts[i - 1], pts[i], k),
+      tangent: new THREE.Vector3().subVectors(pts[i], pts[i - 1]).normalize()
+    }
+  }
+
+  /**
+   * 推进一列车：牵引加速度 / 进站制动（v²/2a 刹车距离）→ 平滑停靠；
+   * 越过站点弧长时吸附进站，端点折返。reduceMotion 时完全冻结。
+   */
+  _advanceTrain(train, dt) {
+    const entry = this.lineEntries[train.lineId]
+    if (train.dwell > 0) {
+      train.dwell -= dt
+      return
+    }
+    const cum = entry.cum
+    const ACCEL = 64
+    const remain = (cum[train.nextIdx] - train.s) * train.dir
+    const brakeDist = (train.v * train.v) / (2 * ACCEL)
+    if (remain <= brakeDist) train.v = Math.max(0, train.v - ACCEL * dt)
+    else train.v = Math.min(train.cruise, train.v + ACCEL * dt)
+    const next = train.s + train.v * dt * train.dir
+    if ((next - cum[train.nextIdx]) * train.dir >= 0) {
+      // 进站：吸附到站台弧长，停靠后按折返 / 继续行驶更新下一目标
+      const idx = train.nextIdx
+      train.s = cum[idx]
+      train.v = 0
+      train.dwell = 0.75
+      this._pulseStation(entry, idx)
+      this._flashStationLabel(entry, idx)
+      const len = cum.length
+      if (idx === 0) {
+        train.dir = 1
+        train.nextIdx = 1
+      } else if (idx === len - 1) {
+        train.dir = -1
+        train.nextIdx = len - 2
+      } else {
+        train.nextIdx = idx + train.dir
+      }
+    } else {
+      train.s = next
+    }
+  }
+
+  /** 进站脉冲：站台柱体短暂鼓一下，给静态网络加入「时刻感」 */
+  _pulseStation(entry, idx) {
+    const mesh = entry.stationMeshes[idx]
+    if (!mesh) return
+    this.pulses.push({ mesh, base: mesh.scale.clone(), ttl: 0.8, dur: 0.8 })
+  }
+
+  /** 进站时站名标签亮一下（列车到站的「报站」感） */
+  _flashStationLabel(entry, idx) {
+    const station = entry.line && entry.line.stations[idx]
+    const el = station && this.stationLabels[station.stationId]
+    if (!el) return
+    el.classList.add('arriving')
+    clearTimeout(this._arriveTimers?.[station.stationId])
+    if (!this._arriveTimers) this._arriveTimers = {}
+    this._arriveTimers[station.stationId] = setTimeout(() => {
+      el.classList.remove('arriving')
+      delete this._arriveTimers[station.stationId]
+    }, 950)
+  }
+
+  _updatePulses(dt) {
+    for (let i = this.pulses.length - 1; i >= 0; i -= 1) {
+      const p = this.pulses[i]
+      p.ttl -= dt
+      if (p.ttl <= 0) {
+        // 恢复基准缩放：选中站由 highlightLine 维护（1.35），非选中站恒为 1
+        const sel = this.selectedStationId
+        if (!sel || p.mesh.userData.stationId !== sel) p.mesh.scale.set(1, 1, 1)
+        this.pulses.splice(i, 1)
+        continue
+      }
+      const k = 1 - p.ttl / p.dur
+      p.mesh.scale.copy(p.base).multiplyScalar(1 + Math.sin(k * Math.PI) * 0.45)
+    }
+  }
+
+  /** 车厢中心相对车头节的前后偏移（弧长）：前节 +5.6 / 中间 0 / 尾节 -5.6 */
+  _updateTrains(dt) {
+    for (const train of this.trains) {
+      // 物理冻结但仍然摆位：否则 reduceMotion 下 14 列列车全堆在世界原点
+      if (!this.reduceMotion) this._advanceTrain(train, dt)
+      const entry = this.lineEntries[train.lineId]
+      for (let i = 0; i < train.cars.length; i += 1) {
+        const { car } = train.cars[i]
+        const off = (CAR_SPACING - i * CAR_SPACING) * train.dir
+        const { pos, tangent } = this._sample(entry.pts, entry.cum, train.s + off)
+        if (train.dir < 0) tangent.negate()
+        car.position.set(pos.x, entry.liftY + 2, pos.z)
+        car.quaternion.setFromUnitVectors(PLUS_Z, tangent)
+      }
+    }
+  }
+
+  /** 进入列车跟随镜头：相机锁在车尾侧上方，视线前探（controls 暂时让位） */
+  startFollow(train) {
+    this.followTrain = train
+    this.controls.enabled = false
+    const dir = new THREE.Vector3()
+    this.camera.getWorldDirection(dir)
+    // 平滑起播：视线目标从「当前朝向前方」渐变到列车前方，避免第一帧硬切
+    this._followLook.copy(this.camera.position).addScaledVector(dir, 80)
+    this.callbacks.onFollowChange?.(true)
+  }
+
+  exitFollow() {
+    if (!this.followTrain) return
+    this.followTrain = null
+    this.controls.enabled = true
+    this.callbacks.onFollowChange?.(false)
+  }
+
+  _updateFollow(dt) {
+    const train = this.followTrain
+    if (!train) return
+    const entry = this.lineEntries[train.lineId]
+    const { pos, tangent } = this._sample(entry.pts, entry.cum, train.s)
+    if (train.dir < 0) tangent.negate()
+    // 机位：车尾后上方 + 向右侧偏移一点，比正后方对称机位更有「乘车感」
+    const right = new THREE.Vector3().crossVectors(tangent, UP_Y).normalize()
+    const camPos = pos
+      .clone()
+      .addScaledVector(tangent, -46)
+      .addScaledVector(UP_Y, 24)
+      .addScaledVector(right, 9)
+    this.camera.position.lerp(camPos, 1 - Math.exp(-dt * 3.2))
+    this._followLook.lerp(pos.clone().addScaledVector(tangent, 36), Math.min(1, dt * 6))
+    this.camera.lookAt(this._followLook)
+  }
+
   onPointerDown(e) {
+    if (this.followTrain) {
+      // 跟随模式中任意按压视为「接管镜头」：先退出跟随，本次点击不再二次触发拾取
+      this.exitFollow()
+      this.tapHit = null
+      return
+    }
     this.downPos = { x: e.clientX, y: e.clientY }
     this.updatePointerFromEvent(e)
     // 触屏没有 hover，pointermove 不会在点击前触发；
@@ -311,7 +579,7 @@ export class MetroScene {
 
   pick() {
     this.raycaster.setFromCamera(this.pointer, this.camera)
-    const targets = [...this.stationHitMeshes]
+    const targets = [...this.stationHitMeshes, ...this.trainBodies]
     for (const lid in this.lineEntries) targets.push(...this.lineEntries[lid].lineMeshes)
     const hits = this.raycaster.intersectObjects(targets.filter(Boolean), false)
     return hits.length ? hits[0].object : null
@@ -327,30 +595,245 @@ export class MetroScene {
     if (!hit) return
     if (hit.userData.type === 'station') this.callbacks.onSelectStation(hit.userData.stationId)
     else if (hit.userData.type === 'line') this.callbacks.onSelectLine(hit.userData.lineId)
+    else if (hit.userData.type === 'train') this.startFollow(hit.userData.train)
   }
 
   highlightLine(lineId, stationId) {
     this.selectedLineId = lineId
     this.selectedStationId = stationId
+    this._applyFocus()
     for (const lid in this.lineEntries) {
       const entry = this.lineEntries[lid]
-      const isFocus = !lineId || lid === lineId
-      entry.tubeMat.opacity = isFocus ? 0.96 : 0.14
-      entry.tubeMat.emissiveIntensity = isFocus ? 1 : 0.25
       entry.stationMeshes.forEach((m) => {
-        const isThis = m.userData.lineId === lid
         const isSel = stationId && m.userData.stationId === stationId
-        m.material.opacity = isFocus ? 1 : 0.15
         if (isSel) {
           m.material.color.set(0xffffff)
           m.material.emissive.set(0x38e1ff)
           m.scale.set(1.35, 1.9, 1.35)
-        } else if (isThis) {
+        } else {
           m.scale.set(1, 1, 1)
         }
       })
     }
     this.updateLabels(lineId, stationId)
+  }
+
+  /**
+   * 统一明暗：路径规划激活时只保留途经线路，否则按当前选中线路聚焦。
+   * 管线 / 站点 / 列车 / 车头灯同源明暗，避免「线亮车暗」的割裂感。
+   */
+  _applyFocus() {
+    for (const lid in this.lineEntries) {
+      const entry = this.lineEntries[lid]
+      const isFocus = this.routeLineIds
+        ? this.routeLineIds.has(lid)
+        : !this.selectedLineId || lid === this.selectedLineId
+      entry.tubeMat.opacity = isFocus ? 0.96 : 0.1
+      entry.tubeMat.emissiveIntensity = isFocus ? 1 : 0.2
+      entry.stationMeshes.forEach((m) => {
+        m.material.opacity = isFocus ? 1 : 0.12
+      })
+      // 列车五件套同源明暗：车身 / 车窗 / 光晕 / 头灯 / 尾灯
+      if (entry.trainMat) entry.trainMat.opacity = isFocus ? 1 : 0.16
+      if (entry.windowMat) entry.windowMat.opacity = isFocus ? 0.92 : 0.08
+      if (entry.glowMat) entry.glowMat.opacity = isFocus ? 0.22 : 0.03
+      if (entry.headMat) entry.headMat.opacity = isFocus ? 1 : 0.15
+      if (entry.tailMat) entry.tailMat.opacity = isFocus ? 1 : 0.15
+    }
+  }
+
+  /**
+   * 展示路径规划叠加层（route 结构见 data/routePlanner.js）：
+   * 途经线路光晕管 + 沿全程流动的流光粒子（颜色跟随乘车段）+
+   * 起终点旋转光环与旗标 + 换乘站呼吸脉冲；非途经线路整体压暗。
+   */
+  showRoute(route) {
+    this.clearRoute()
+    if (!route || !route.segments.length) return
+    const group = new THREE.Group()
+    const segs = []
+    let total = 0
+    for (const seg of route.segments) {
+      const entry = this.lineEntries[seg.lineId]
+      if (!entry) continue
+      const pts = seg.stationIds
+        .filter((sid) => sid in entry.stationIndexById)
+        .map((sid) => entry.pts[entry.stationIndexById[sid]].clone().setY(entry.liftY + 0.5))
+      if (pts.length < 2) continue
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(seg.color),
+        transparent: true,
+        opacity: 0.3,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      })
+      this._tubeAlong(group, pts, 2.6, glowMat)
+      const cum = [0]
+      for (let i = 1; i < pts.length; i += 1) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]))
+      segs.push({ pts, cum, color: seg.color, base: total, len: cum[cum.length - 1] })
+      total += cum[cum.length - 1]
+    }
+    if (!segs.length || total <= 0) {
+      group.traverse((o) => {
+        if (o.geometry) o.geometry.dispose()
+        if (o.material) o.material.dispose()
+      })
+      return
+    }
+
+    // 流光粒子：数量随路径长度伸缩，均匀散布、匀速循环
+    const count = Math.max(8, Math.min(44, Math.round(total / 26)))
+    const inst = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(1.3, 8, 6),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      }),
+      count
+    )
+    inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    const states = []
+    const tmpColor = new THREE.Color()
+    for (let i = 0; i < count; i += 1) {
+      const off = (i / count) * total
+      const segIdx = this._findSeg(segs, off)
+      states.push({ off, segIdx })
+      inst.setColorAt(i, tmpColor.set(segs[segIdx].color))
+    }
+    group.add(inst)
+
+    // 起终点：旋转光环 + CSS2D 旗标；带 markers（主题一日线序号气泡）时改用气泡
+    const rings = []
+    const flags = []
+    if (route.markers && route.markers.length) {
+      for (const mk of route.markers) {
+        const entry = this.lineEntries[mk.lineId]
+        const idx = entry && entry.stationIndexById[mk.stationId]
+        if (idx == null) continue
+        const p = entry.pts[idx]
+        const div = document.createElement('div')
+        div.className = 'route-num'
+        div.textContent = mk.text
+        if (mk.color) {
+          div.style.background = mk.color
+          div.style.boxShadow = `0 0 12px ${mk.color}66`
+        }
+        const obj = new CSS2DObject(div)
+        obj.position.set(p.x, entry.liftY + 9, p.z)
+        group.add(obj)
+        flags.push(obj)
+      }
+    } else {
+      ;[route.stations[0], route.stations[route.stations.length - 1]].forEach((st, i) => {
+        const entry = this.lineEntries[st.lineId]
+        const idx = entry && entry.stationIndexById[st.stationId]
+        if (idx == null) return
+        const p = entry.pts[idx]
+        const ringGeo = new THREE.TorusGeometry(5.4, 0.5, 10, 40)
+        ringGeo.rotateX(Math.PI / 2)
+        const ring = new THREE.Mesh(
+          ringGeo,
+          new THREE.MeshBasicMaterial({ color: i === 0 ? 0x38e1ff : 0xffb457, transparent: true, opacity: 0.9 })
+        )
+        ring.position.set(p.x, entry.liftY + 1.4, p.z)
+        group.add(ring)
+        rings.push(ring)
+        const div = document.createElement('div')
+        div.className = 'route-flag' + (i === 1 ? ' dest' : '')
+        div.textContent = i === 0 ? '起点' : '终点'
+        const obj = new CSS2DObject(div)
+        obj.position.set(p.x, entry.liftY + 9.5, p.z)
+        group.add(obj)
+        flags.push(obj)
+      })
+    }
+
+    // 换乘站呼吸脉冲（记录基准缩放，清除时还原）；终点站若是「到站即换乘」不做脉冲
+    const pulseMeshes = []
+    for (const st of route.stations) {
+      if (!st.transferIn || st.stationId === route.destId) continue
+      const mesh = this.stationMeshById[st.stationId]
+      if (mesh) pulseMeshes.push({ mesh, base: mesh.scale.clone() })
+    }
+
+    this.route = { group, inst, states, segs, total, rings, flags, pulseMeshes }
+    this.routeLineIds = new Set(route.segments.map((s) => s.lineId))
+    this.scene.add(group)
+    this._applyFocus()
+  }
+
+  /** 清除路径叠加层，并把明暗恢复为「按当前选中线路聚焦」 */
+  clearRoute() {
+    const r = this.route
+    this.route = null
+    this.routeLineIds = null
+    if (!r) return
+    this.scene.remove(r.group)
+    r.group.traverse((o) => {
+      if (o.geometry) o.geometry.dispose()
+      if (o.material) o.material.dispose()
+    })
+    for (const f of r.flags) f.element.remove()
+    for (const p of r.pulseMeshes) p.mesh.scale.copy(p.base)
+    this._applyFocus()
+  }
+
+  /** 沿折线铺发光管：开式圆柱端点严格落在站点上，与主线路同构 */
+  _tubeAlong(parent, pts, radius, mat) {
+    for (let i = 1; i < pts.length; i += 1) {
+      const a = pts[i - 1]
+      const b = pts[i]
+      const dir = new THREE.Vector3().subVectors(b, a)
+      const len = dir.length()
+      if (len < 0.001) continue
+      const segGeo = new THREE.CylinderGeometry(radius, radius, len, 8, 1, true)
+      const seg = new THREE.Mesh(segGeo, mat)
+      seg.position.copy(a).addScaledVector(dir, 0.5)
+      seg.quaternion.setFromUnitVectors(UP_Y, dir.clone().normalize())
+      parent.add(seg)
+    }
+  }
+
+  /** 按全程偏移量定位所在乘车段（segs 按 base 升序） */
+  _findSeg(segs, off) {
+    for (let i = segs.length - 1; i >= 0; i -= 1) {
+      if (off >= segs[i].base) return i
+    }
+    return 0
+  }
+
+  _updateRoute(dt) {
+    const r = this.route
+    if (!r) return
+    if (!this.reduceMotion) {
+      const m = new THREE.Matrix4()
+      const col = new THREE.Color()
+      for (let i = 0; i < r.states.length; i += 1) {
+        const st = r.states[i]
+        st.off = (st.off + dt * 55) % r.total
+        const segIdx = this._findSeg(r.segs, st.off)
+        const seg = r.segs[segIdx]
+        const { pos } = this._sample(seg.pts, seg.cum, st.off - seg.base)
+        m.makeTranslation(pos.x, pos.y + 1.9, pos.z)
+        r.inst.setMatrixAt(i, m)
+        if (st.segIdx !== segIdx) {
+          st.segIdx = segIdx
+          r.inst.setColorAt(i, col.set(seg.color))
+          r.inst.instanceColor.needsUpdate = true
+        }
+      }
+      r.inst.instanceMatrix.needsUpdate = true
+    }
+    // 换乘站呼吸脉冲
+    const k = 1 + 0.32 * (0.5 + 0.5 * Math.sin(this.elapsed * 6))
+    for (const p of r.pulseMeshes) p.mesh.scale.copy(p.base).multiplyScalar(k)
+    // 起终点环旋转 + 呼吸
+    for (const ring of r.rings) {
+      ring.rotation.z += dt * 1.1
+      ring.scale.setScalar(1 + 0.09 * Math.sin(this.elapsed * 3))
+    }
   }
 
   updateLabels(lineId, stationId) {
@@ -369,6 +852,8 @@ export class MetroScene {
         if (show) usedNames.add(s.name)
         this.labelSemantic[s.stationId] = show
         el.classList.toggle('selected', isSel)
+        // 非聚焦线的标签压暗，聚焦时不抢戏（选中站永远清晰）
+        el.classList.toggle('dim', !isFocus && !isSel)
       }
     }
   }
@@ -430,10 +915,12 @@ export class MetroScene {
   }
 
   resetView() {
+    this.exitFollow()
     this.flyTo(new THREE.Vector3(-80, 420, 560), new THREE.Vector3(0, 0, 0), !this.lastView)
   }
 
   topView() {
+    this.exitFollow()
     this.flyTo(new THREE.Vector3(0, 980, 4), new THREE.Vector3(0, 0, 0), true)
   }
 
@@ -524,8 +1011,13 @@ export class MetroScene {
     if (this.disposed) return
     requestAnimationFrame(this.animate)
     const delta = this.clock.getDelta()
+    this.elapsed += delta
     this.controls.update(delta)
     this._updateViewOffset(delta)
+    this._updateTrains(delta)
+    this._updateFollow(delta)
+    this._updatePulses(delta)
+    this._updateRoute(delta)
     this.cullLabels()
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
@@ -533,6 +1025,10 @@ export class MetroScene {
 
   dispose() {
     this.disposed = true
+    if (this._arriveTimers) {
+      Object.values(this._arriveTimers).forEach((t) => clearTimeout(t))
+      this._arriveTimers = null
+    }
     this.controls.removeEventListener('controlstart', this._onUserInput)
     this.controls.dispose()
     if (this._stopObserving) this._stopObserving()
