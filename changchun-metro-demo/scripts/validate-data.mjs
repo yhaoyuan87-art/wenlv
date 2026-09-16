@@ -75,6 +75,24 @@ for (const t of themes) {
   }
 }
 
+// 6. 线网站点必须落在某个区划多边形内（扩线后区划漏盖会露底）
+function inPoly(px, py, poly) {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]
+    const [xj, yj] = poly[j]
+    if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside
+  }
+  return inside
+}
+for (const line of metroLines) {
+  for (const s of line.stations) {
+    if (!districts.some((dd) => inPoly(s.x, s.y, dd.polygon))) {
+      warn(`${line.shortName} ${s.name}(${s.x},${s.y}): 落在所有区划之外，请扩区划多边形`)
+    }
+  }
+}
+
 if (errors.length) {
   console.error(`\n✗ 数据校验失败（${errors.length} 处）:\n`)
   errors.forEach((e) => console.error('  - ' + e))

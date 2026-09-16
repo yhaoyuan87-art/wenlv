@@ -1017,7 +1017,7 @@
     "shortName": "8号线",
     "type": "light-rail",
     "color": "#17c3b2",
-    "direction": "北环城路 ↔ 地理所",
+    "direction": "北环城路 ↔ 广通路",
     "stations": [
       {
         "stationId": "st-08-01",
