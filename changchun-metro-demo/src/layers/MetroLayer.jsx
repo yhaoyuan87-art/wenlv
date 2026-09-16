@@ -22,11 +22,13 @@ export default function MetroLayer() {
   // ---- 路径规划 / 跟随 / 主题一日线的 UI 状态 ----
   const themeId = useStore((s) => s.themeId)
   const themeMeta = useMemo(() => (themeId ? getTheme(themeId) : null), [themeId])
+  const stationId = useStore((s) => s.stationId)
   const [plannerOpen, setPlannerOpen] = useState(false)
   const [originId, setOriginId] = useState(null)
   const [destId, setDestId] = useState(null)
   const [route, setRoute] = useState(null)
   const [follow, setFollow] = useState(false)
+  const [section, setSection] = useState(false)
   // 主题路线纯派生：景点站串联（相邻段 findRoute + 同线合并），无需 effect/state
   const themeRoute = useMemo(() => {
     if (!themeMeta) return null
@@ -120,7 +122,8 @@ export default function MetroLayer() {
           else useStore.getState().selectStation(stationId)
         },
         onSelectLine: (lineId) => useStore.getState().selectLine(lineId),
-        onFollowChange: (v) => setFollow(v)
+        onFollowChange: (v) => setFollow(v),
+        onSectionChange: (v) => setSection(v)
       })
       scene.setReduceMotion(store.reduceMotion)
       scene.setTheme()
@@ -130,6 +133,8 @@ export default function MetroLayer() {
       // 挂载时已有激活路线（带 ?theme= 直进 / 规划态残留）则立即上屏
       const activeRoute = latestRef.current.route || latestRef.current.themeRoute
       if (activeRoute) scene.showRoute(activeRoute)
+      // 电影式开场：只在「无深链上下文」时播放（场景内部还会做每会话一次的节流）
+      if (!store.stationId && !store.lineId) scene.playIntro()
     } catch (err) {
       // 创建渲染器 / 场景抛错时同样走兜底，避免整页白屏
       console.error('[MetroLayer] 3D 场景初始化失败，已降级为提示卡片', err)
@@ -183,7 +188,11 @@ export default function MetroLayer() {
           }
         }
         scene.highlightLine(s.lineId, s.stationId)
-        if (s.stationId) scene.focusStation(s.stationId)
+        if (scene.section) {
+          // 剖面模式跟随选中切换：换站点重建剖面（内部自带入地镜头）
+          if (s.stationId) scene.enterSection(s.stationId)
+          else scene.exitSection()
+        } else if (s.stationId) scene.focusStation(s.stationId)
         else if (s.lineId) scene.focusLine(s.lineId)
       }
       if (s.reduceMotion !== prevMotion) {
@@ -215,8 +224,22 @@ export default function MetroLayer() {
     const scene = sceneRef.current
     if (!scene) return
     setView(mode)
+    // 切换全局视图时退出剖面（exitSection 内部无镜头操作，交由视图按钮接管）
+    scene.exitSection()
     if (mode === 'top') scene.topView()
     else scene.resetView()
+  }
+
+  const toggleSection = () => {
+    const scene = sceneRef.current
+    if (!scene) return
+    if (scene.section) {
+      scene.exitSection()
+      setView('reset')
+      scene.resetView()
+    } else if (stationId) {
+      scene.enterSection(stationId)
+    }
   }
 
   if (unsupported) return <WebGLFallback layer="metro" />
@@ -246,6 +269,14 @@ export default function MetroLayer() {
         ))}
         <button className={'view-btn' + (plannerOpen ? ' on' : '')} onClick={() => (plannerOpen ? closePlanner() : setPlannerOpen(true))}>
           规划
+        </button>
+        <button
+          className={'view-btn' + (section ? ' on' : '')}
+          disabled={!stationId && !section}
+          title={!stationId && !section ? '先在 3D 中选择一个站点' : '站体剖面：B1 站厅 / B2 站台'}
+          onClick={toggleSection}
+        >
+          剖面
         </button>
       </div>
 

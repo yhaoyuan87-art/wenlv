@@ -1,8 +1,13 @@
 import * as THREE from 'three'
 import CameraControls from 'camera-controls'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { districts } from '../data/districts.js'
 import { metroLines } from '../data/metroLines.js'
+import { plannedLines } from '../data/plannedLines.js'
 import { poisByStation } from '../data/pois.js'
 import { toXZ } from './CityScene.js'
 import { pixelRatio, fitCamera, portraitPull, observeSize, isMobile } from './adapt.js'
@@ -47,6 +52,16 @@ export class MetroScene {
     this.route = null
     this.routeLineIds = null
     this.elapsed = 0
+    // ---- 站体剖面 ----
+    this.section = null
+    this.sectionLineIds = null
+    // ---- 开场运镜 ----
+    this._intro = null
+    this._introLook = new THREE.Vector3()
+    // ---- 规划幽灵层 / Bloom ----
+    this.ghostEntries = []
+    this.composer = null
+    this.bloomPass = null
 
     this._onPointerDown = this.onPointerDown.bind(this)
     this._onPointerMove = this.onPointerMove.bind(this)
@@ -105,6 +120,8 @@ export class MetroScene {
     this.buildGround()
     this.buildLines()
     this.buildTrains()
+    this.buildGhostLines()
+    this._initBloom()
     this.updateLabels(null, null)
 
     this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown)
@@ -393,6 +410,60 @@ export class MetroScene {
     }
   }
 
+  /**
+   * 规划线路幽灵层：半透明虚线全息 + 「规划中」标签，
+   * 透明度随时间缓慢呼吸，与运营线路拉开「已建成 / 未来时」的观感差。
+   */
+  buildGhostLines() {
+    plannedLines.forEach((gl, gi) => {
+      const pts = gl.points.map(([x, y]) => {
+        const { X, Z } = toXZ(x, y)
+        return new THREE.Vector3(X, 15, Z)
+      })
+      const geo = new THREE.BufferGeometry().setFromPoints(pts)
+      const mat = new THREE.LineDashedMaterial({
+        color: new THREE.Color(gl.color),
+        dashSize: 6,
+        gapSize: 5,
+        transparent: true,
+        opacity: 0.5
+      })
+      const lineObj = new THREE.Line(geo, mat)
+      lineObj.computeLineDistances()
+      this.scene.add(lineObj)
+      const end = pts[pts.length - 1]
+      const div = document.createElement('div')
+      div.className = 'metro-ghost-label'
+      div.textContent = `${gl.name} · ${gl.status}`
+      const labelObj = new CSS2DObject(div)
+      labelObj.position.copy(end).add(new THREE.Vector3(0, 12, 0))
+      this.scene.add(labelObj)
+      this.ghostEntries.push({ mat, phase: gi * 2.1 })
+    })
+  }
+
+  /**
+   * Bloom 后处理：仅桌面端启用（移动端 GPU 预算留给渲染本身），
+   * 强度/阈值随主题切换——夜间浓霓虹、白天轻提亮避免整屏过曝。
+   */
+  _initBloom() {
+    if (isMobile()) return
+    try {
+      const w = this.container.clientWidth || 1
+      const h = this.container.clientHeight || 1
+      this.composer = new EffectComposer(this.renderer)
+      this.composer.addPass(new RenderPass(this.scene, this.camera))
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.75, 0.45, 0.5)
+      this.composer.addPass(this.bloomPass)
+      this.composer.addPass(new OutputPass())
+    } catch (err) {
+      // 后处理初始化失败不致命：退回直渲
+      console.warn('[MetroScene] Bloom 初始化失败，使用直渲', err)
+      this.composer = null
+      this.bloomPass = null
+    }
+  }
+
   /** 折线上按弧长取点：返回位置与切线（列车 / 跟随镜头 / 流光粒子共用） */
   _sample(pts, cum, s) {
     const total = cum[cum.length - 1]
@@ -537,7 +608,91 @@ export class MetroScene {
     this.camera.lookAt(this._followLook)
   }
 
+  /**
+   * 电影式开场：贴着 1 号线低位起步 → 拉升翻出地面 → 落到全网俯瞰。
+   * 每会话只播一次（sessionStorage）；任何主动镜头操作都会打断；
+   * reduceMotion 直接不播。返回是否真的开始播放。
+   */
+  playIntro() {
+    if (this.reduceMotion || this._intro) return false
+    try {
+      if (sessionStorage.getItem('ccmetro-intro')) return false
+    } catch {
+      return false
+    }
+    const entry = this.lineEntries['line-01']
+    if (!entry) return false
+    const mid = entry.pts[Math.floor(entry.pts.length / 2)]
+    this._intro = {
+      t: 0,
+      dur: 4.4,
+      keys: [
+        // 起步：贴轨低位沿行进方向前探（像坐在车头上）
+        { pos: new THREE.Vector3(mid.x + 12, 7, mid.z + 30), look: new THREE.Vector3(mid.x - 70, 9, mid.z - 90) },
+        // 中段：翻出地面，城市边缘入画
+        { pos: new THREE.Vector3(-30, 230, 330), look: new THREE.Vector3(0, 0, 0) },
+        // 落幅：默认全网机位（与 resetView 一致）
+        { pos: new THREE.Vector3(-80, 420, 560), look: new THREE.Vector3(0, 0, 0) }
+      ]
+    }
+    this.controls.enabled = false
+    this.lastView = null
+    try {
+      sessionStorage.setItem('ccmetro-intro', '1')
+    } catch {
+      /* 无痕模式等场景下存不进去也就每页播放一次，无碍 */
+    }
+    return true
+  }
+
+  /** 结束开场；settle=true 时无动画落位到默认机位，false 交由调用方接管镜头 */
+  _finishIntro(settle) {
+    if (!this._intro) return
+    this._intro = null
+    this.controls.enabled = true
+    if (settle) {
+      const pos = new THREE.Vector3(-80, 420, 560)
+      const look = new THREE.Vector3(0, 0, 0)
+      this.camera.position.copy(pos)
+      this.camera.lookAt(look)
+      this.lastView = { pos, look }
+    }
+  }
+
+  _updateIntro(dt) {
+    const intro = this._intro
+    if (!intro) return
+    intro.t += dt
+    const k = intro.t / intro.dur
+    if (k >= 1) {
+      this._finishIntro(true)
+      return
+    }
+    const smooth = (t) => t * t * (3 - 2 * t)
+    let a
+    let b
+    let tt
+    if (k < 0.55) {
+      a = intro.keys[0]
+      b = intro.keys[1]
+      tt = smooth(k / 0.55)
+    } else {
+      a = intro.keys[1]
+      b = intro.keys[2]
+      tt = smooth((k - 0.55) / 0.45)
+    }
+    this.camera.position.lerpVectors(a.pos, b.pos, tt)
+    this._introLook.lerpVectors(a.look, b.look, tt)
+    this.camera.lookAt(this._introLook)
+  }
+
   onPointerDown(e) {
+    if (this._intro) {
+      // 开场运镜中任意按压 = 跳过，本次点击不二次触发拾取
+      this._finishIntro(true)
+      this.tapHit = null
+      return
+    }
     if (this.followTrain) {
       // 跟随模式中任意按压视为「接管镜头」：先退出跟随，本次点击不再二次触发拾取
       this.exitFollow()
@@ -619,7 +774,7 @@ export class MetroScene {
   }
 
   /**
-   * 统一明暗：路径规划激活时只保留途经线路，否则按当前选中线路聚焦。
+   * 统一明暗，三级优先：路径规划 > 站体剖面 > 选中线路。
    * 管线 / 站点 / 列车 / 车头灯同源明暗，避免「线亮车暗」的割裂感。
    */
   _applyFocus() {
@@ -627,7 +782,9 @@ export class MetroScene {
       const entry = this.lineEntries[lid]
       const isFocus = this.routeLineIds
         ? this.routeLineIds.has(lid)
-        : !this.selectedLineId || lid === this.selectedLineId
+        : this.sectionLineIds
+          ? this.sectionLineIds.has(lid)
+          : !this.selectedLineId || lid === this.selectedLineId
       entry.tubeMat.opacity = isFocus ? 0.96 : 0.1
       entry.tubeMat.emissiveIntensity = isFocus ? 1 : 0.2
       entry.stationMeshes.forEach((m) => {
@@ -640,6 +797,140 @@ export class MetroScene {
       if (entry.headMat) entry.headMat.opacity = isFocus ? 1 : 0.15
       if (entry.tailMat) entry.tailMat.opacity = isFocus ? 1 : 0.15
     }
+  }
+
+  /**
+   * 站体剖面模式：镜头钻入地下，展开 B1 站厅 / B2 站台两层剖视结构，
+   * 含双侧站台、轨道与停站列车、出入口光柱；地面网络压暗成背景。
+   * @returns 是否成功进入（站点无效返回 false）
+   */
+  enterSection(stationId) {
+    if (!stationId) return false
+    this.exitSection()
+    this.exitFollow()
+    let found = null
+    for (const line of metroLines) {
+      const st = line.stations.find((s) => s.stationId === stationId)
+      if (st) {
+        found = { line, st }
+        break
+      }
+    }
+    if (!found) return false
+    const { X, Z } = toXZ(found.st.x, found.st.y)
+    const accent = hexToNumber(cssVar('--accent'), 0x38e1ff)
+    const isTransfer = (found.st.transfer || []).length > 0
+    const W = isTransfer ? 56 : 44
+    const D = 30
+    const B1 = -14
+    const B2 = -26
+
+    const group = new THREE.Group()
+    group.position.set(X, 0, Z)
+    const slabMat = new THREE.MeshStandardMaterial({ color: 0x2a3d63, roughness: 0.6, metalness: 0.1, transparent: true, opacity: 0.95 })
+    const platMat = new THREE.MeshStandardMaterial({ color: 0x3a538a, roughness: 0.55, transparent: true, opacity: 0.95 })
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x182644, roughness: 0.8, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false })
+    const trackMat = new THREE.MeshStandardMaterial({ color: 0x0d1626, roughness: 0.4, metalness: 0.5 })
+    const rimMat = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.55 })
+    const beamMat = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false })
+
+    const box = (w, h, d, mat, x, y, z) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
+      m.position.set(x, y, z)
+      group.add(m)
+      return m
+    }
+
+    // B2 站台层：底板 + 双侧站台 + 双轨道 + 一列停站列车
+    box(W, 0.8, D, slabMat, 0, B2 - 0.4, 0)
+    box(W * 0.3, 1.1, D * 0.44, platMat, -W * 0.32, B2 + 0.55, 0)
+    box(W * 0.3, 1.1, D * 0.44, platMat, W * 0.32, B2 + 0.55, 0)
+    const trackLen = D - 8
+    for (const tx of [-5, 5]) {
+      const track = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, trackLen, 8), trackMat)
+      track.rotation.x = Math.PI / 2
+      track.position.set(tx, B2 + 1.4, 0)
+      group.add(track)
+    }
+    const carGeo = new THREE.CapsuleGeometry(0.95, 2.2, 4, 10)
+    carGeo.rotateX(Math.PI / 2)
+    const parkedMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(found.line.color),
+      emissive: new THREE.Color(found.line.color).multiplyScalar(0.6),
+      emissiveIntensity: 0.9,
+      roughness: 0.35,
+      transparent: true
+    })
+    for (let c = -1; c <= 1; c += 1) {
+      const car = new THREE.Mesh(carGeo, parkedMat)
+      car.position.set(5, B2 + 2.5, c * 4)
+      group.add(car)
+    }
+
+    // B1 站厅层：楼板
+    box(W, 0.8, D, slabMat, 0, B1, 0)
+    // 连接柱
+    for (const cx of [-W * 0.34, W * 0.34]) {
+      for (const cz of [-D * 0.3, D * 0.3]) {
+        box(1.3, B1 - B2 - 0.8, 1.3, platMat, cx, (B1 + B2) / 2, cz)
+      }
+    }
+    // 换乘站加一层夹层提示（B1 上方薄板）
+    if (isTransfer) box(W * 0.7, 0.5, D * 0.6, platMat, 0, B1 + 3.2, 0)
+
+    // 剖切围护：封闭背面与侧面，正面敞开供镜头观看；开口边缘加发光收边
+    box(W, -B2, 0.8, wallMat, 0, B2 / 2, -D / 2)
+    box(0.8, -B2, D, wallMat, -W / 2, B2 / 2, 0)
+    box(W, 0.6, 0.8, rimMat, 0, -0.6, D / 2)
+    box(0.8, 0.6, D, rimMat, W / 2, -0.6, 0)
+
+    // 出入口光柱：从站台直通地面
+    for (const [ex, ez] of [[W * 0.4, D * 0.32], [-W * 0.4, -D * 0.32]]) {
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, -B2 + 2, 12, 1, true), beamMat)
+      beam.position.set(ex, (-B2 + 2) / 2 - 1, ez)
+      group.add(beam)
+    }
+
+    // 深度标签
+    const flags = []
+    const mkLabel = (text, x, y, z) => {
+      const div = document.createElement('div')
+      div.className = 'section-depth-label'
+      div.textContent = text
+      const obj = new CSS2DObject(div)
+      obj.position.set(x, y, z)
+      group.add(obj)
+      flags.push(obj)
+    }
+    mkLabel('B1 站厅层 -14m', W * 0.22, B1 + 3, D * 0.4)
+    mkLabel('B2 站台层 -26m', W * 0.22, B2 + 3.4, D * 0.4)
+
+    this.scene.add(group)
+    this.section = { group, flags, stationId, lineId: found.line.lineId }
+    this.sectionLineIds = new Set([found.line.lineId])
+    this._applyFocus()
+    this.updateLabels(found.line.lineId, stationId)
+    // 镜头入地：斜俯视坑体（机位高于目标点，极角约束内）
+    this.flyTo(new THREE.Vector3(X + 44, 4, Z + 88), new THREE.Vector3(X, -15, Z))
+    this.callbacks.onSectionChange?.(true)
+    return true
+  }
+
+  /** 退出剖面并恢复明暗（镜头交由调用方接管） */
+  exitSection() {
+    const sec = this.section
+    if (!sec) return
+    this.section = null
+    this.sectionLineIds = null
+    this.scene.remove(sec.group)
+    sec.group.traverse((o) => {
+      if (o.geometry) o.geometry.dispose()
+      if (o.material) o.material.dispose()
+    })
+    for (const f of sec.flags) f.element.remove()
+    this._applyFocus()
+    this.updateLabels(this.selectedLineId, this.selectedStationId)
+    this.callbacks.onSectionChange?.(false)
   }
 
   /**
@@ -928,6 +1219,7 @@ export class MetroScene {
    * @param animate 是否补间；false 用于首帧定位与旋转屏后的重新构图
    */
   flyTo(pos, look, animate = true) {
+    if (this._intro) this._finishIntro(false)
     this.lastView = { pos: pos.clone(), look: look.clone() }
     const p = new THREE.Vector3(
       look.x + (pos.x - look.x) * this.pull,
@@ -943,7 +1235,7 @@ export class MetroScene {
     return hexToNumber(hex, 0x070c17)
   }
 
-  /** 主题切换：同步场景背景、雾、网格与灯光反射色 */
+  /** 主题切换：同步场景背景、雾、网格与灯光反射色；Bloom 参数随主题自适应 */
   setTheme() {
     const bg = this._sceneBg()
     if (this.scene.background) this.scene.background.set(bg)
@@ -953,6 +1245,18 @@ export class MetroScene {
     }
     if (this.hemiLight) {
       this.hemiLight.groundColor.set(hexToNumber(cssVar('--scene-bounce'), 0x141c30))
+    }
+    if (this.bloomPass) {
+      const light = document.documentElement.classList.contains('theme-light')
+      if (light) {
+        this.bloomPass.strength = 0.22
+        this.bloomPass.threshold = 0.85
+        this.bloomPass.radius = 0.3
+      } else {
+        this.bloomPass.strength = 0.75
+        this.bloomPass.threshold = 0.5
+        this.bloomPass.radius = 0.45
+      }
     }
   }
 
@@ -997,6 +1301,7 @@ export class MetroScene {
     if (!w || !h) return
     this.renderer.setSize(w, h)
     this.labelRenderer.setSize(w, h)
+    if (this.composer) this.composer.setSize(w, h)
 
     const prevPull = this.pull
     this.applyViewport()
@@ -1014,13 +1319,23 @@ export class MetroScene {
     this.elapsed += delta
     this.controls.update(delta)
     this._updateViewOffset(delta)
+    this._updateIntro(delta)
     this._updateTrains(delta)
     this._updateFollow(delta)
     this._updatePulses(delta)
     this._updateRoute(delta)
+    this._updateGhost(delta)
     this.cullLabels()
-    this.renderer.render(this.scene, this.camera)
+    if (this.composer) this.composer.render(delta)
+    else this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
+  }
+
+  /** 幽灵层呼吸 */
+  _updateGhost() {
+    for (const g of this.ghostEntries) {
+      g.mat.opacity = 0.38 + 0.16 * Math.sin(this.elapsed * 1.8 + g.phase)
+    }
   }
 
   dispose() {
@@ -1028,6 +1343,14 @@ export class MetroScene {
     if (this._arriveTimers) {
       Object.values(this._arriveTimers).forEach((t) => clearTimeout(t))
       this._arriveTimers = null
+    }
+    if (this.composer) {
+      try {
+        this.composer.dispose()
+      } catch {
+        /* 个别版本无 dispose，忽略 */
+      }
+      this.composer = null
     }
     this.controls.removeEventListener('controlstart', this._onUserInput)
     this.controls.dispose()
