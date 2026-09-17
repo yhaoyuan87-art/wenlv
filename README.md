@@ -46,6 +46,8 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
+> Windows 下也可以直接**双击根目录的 `start-demo.bat`**：自动装依赖、拉起服务并打开浏览器。
+
 ## ✅ 质量检查
 
 ```bash

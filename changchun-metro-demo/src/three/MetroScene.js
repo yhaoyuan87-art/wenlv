@@ -20,6 +20,21 @@ const PLUS_Z = new THREE.Vector3(0, 0, 1)
 /** 三节编组的车厢中心间距（弧长偏移，含 0.5 车厢间隙） */
 const CAR_SPACING = 5.6
 
+/** 车窗贴图：一条 4×n 亮窗的 canvas 纹理，横向重复铺在车窗灯带上，比整条实心带更像真车窗 */
+function makeWindowTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 16
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = 'rgba(224, 242, 255, 0.96)'
+  for (let i = 0; i < 4; i += 1) ctx.fillRect(i * 16 + 3, 4, 10, 8)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.wrapS = THREE.RepeatWrapping
+  tex.repeat.set(3, 1)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
 export class MetroScene {
   constructor(container, callbacks) {
     this.container = container
@@ -62,6 +77,7 @@ export class MetroScene {
     this.ghostEntries = []
     this.composer = null
     this.bloomPass = null
+    this.hoverLineId = null
 
     this._onPointerDown = this.onPointerDown.bind(this)
     this._onPointerMove = this.onPointerMove.bind(this)
@@ -179,7 +195,7 @@ export class MetroScene {
       const mat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(d.color),
         transparent: true,
-        opacity: 0.1,
+        opacity: 0.05,
         side: THREE.DoubleSide,
         depthWrite: false
       })
@@ -248,6 +264,18 @@ export class MetroScene {
         group.add(joint)
         lineMeshes.push(joint)
       }
+
+      // 底部光晕：低张力 CatmullRom 包住折线（光晕不怕轻微切角），
+      // additive 半透明光带让管线浮出网格，Bloom 加持下呈霓虹灯管质感
+      const haloCurve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.05)
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(line.color),
+        transparent: true,
+        opacity: 0.08,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      })
+      group.add(new THREE.Mesh(new THREE.TubeGeometry(haloCurve, Math.min(pts.length * 4, 160), 2.8, 8, false), haloMat))
 
       const stationMeshes = []
       line.stations.forEach((s, si) => {
@@ -318,6 +346,7 @@ export class MetroScene {
       this.lineEntries[line.lineId] = {
         group,
         tubeMat,
+        haloMat,
         stationMeshes,
         liftY,
         lineMeshes,
@@ -337,8 +366,11 @@ export class MetroScene {
   buildTrains() {
     const CAR = { radius: 1.25, len: 2.6 } // 胶囊车体：总长 len + 2*radius
     const bodyGeo = new THREE.CapsuleGeometry(CAR.radius, CAR.len, 6, 12)
-    bodyGeo.rotateX(Math.PI / 2) // 车体轴向转到 +Z，与行进切线对齐
+    bodyGeo.rotateX(Math.PI / 2)
+    const winTex = makeWindowTexture()
+    this._winTex = winTex
     const winGeo = new THREE.BoxGeometry(2.72, 0.62, CAR.len + 0.4) // 比车体直径略宽，侧面露出灯带
+    const roofGeo = new THREE.BoxGeometry(1.3, 0.4, CAR.len * 0.52)
     const glowGeo = new THREE.CircleGeometry(2.3, 20)
     glowGeo.rotateX(-Math.PI / 2)
     const lightGeo = new THREE.SphereGeometry(0.55, 8, 8)
@@ -354,7 +386,12 @@ export class MetroScene {
         metalness: 0.25,
         transparent: true
       })
-      const windowMat = new THREE.MeshBasicMaterial({ color: 0xd9edff, transparent: true, opacity: 0.92 })
+      const windowMat = new THREE.MeshBasicMaterial({ map: winTex, transparent: true, opacity: 0.95, depthWrite: false })
+      const roofMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(line.color).multiplyScalar(0.55),
+        roughness: 0.55,
+        transparent: true
+      })
       const glowMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(line.color),
         transparent: true,
@@ -366,6 +403,7 @@ export class MetroScene {
       const tailMat = new THREE.MeshBasicMaterial({ color: 0xff5a3c, transparent: true })
       entry.trainMat = trainMat
       entry.windowMat = windowMat
+      entry.roofMat = roofMat
       entry.glowMat = glowMat
       entry.headMat = headMat
       entry.tailMat = tailMat
@@ -376,6 +414,9 @@ export class MetroScene {
           const body = new THREE.Mesh(bodyGeo, trainMat)
           car.add(body)
           car.add(new THREE.Mesh(winGeo, windowMat))
+          const roof = new THREE.Mesh(roofGeo, roofMat)
+          roof.position.y = 1.32 // 骑在车体顶部，远景读出「车顶设备」剪影
+          car.add(roof)
           const glow = new THREE.Mesh(glowGeo, glowMat)
           glow.position.y = -0.6 // 悬在轨道管上方的柔光晕
           car.add(glow)
@@ -715,6 +756,14 @@ export class MetroScene {
   onPointerLeave() {
     this.pointer.set(-10, -10)
     this.renderer.domElement.style.cursor = 'grab'
+    this.setHoverLine(null)
+  }
+
+  /** 线路悬停增亮：只改 hoverLineId 后统一走 _applyFocus，避免多处手写明暗 */
+  setHoverLine(lid) {
+    if (this.hoverLineId === lid) return
+    this.hoverLineId = lid
+    this._applyFocus()
   }
 
   updatePointerFromEvent(e) {
@@ -727,6 +776,7 @@ export class MetroScene {
     this.updatePointerFromEvent(e)
     const hit = this.pick()
     this.renderer.domElement.style.cursor = hit ? 'pointer' : 'grab'
+    this.setHoverLine(hit && hit.userData.type === 'line' ? hit.userData.lineId : null)
   }
 
   isDrag(e) {
@@ -787,14 +837,18 @@ export class MetroScene {
         : this.sectionLineIds
           ? this.sectionLineIds.has(lid)
           : !this.selectedLineId || lid === this.selectedLineId
+      // hover 的线路额外增亮（只在聚焦态生效，压暗态保持低调）
+      const hovered = this.hoverLineId === lid
       entry.tubeMat.opacity = isFocus ? 0.96 : 0.1
-      entry.tubeMat.emissiveIntensity = isFocus ? 1 : 0.2
+      entry.tubeMat.emissiveIntensity = isFocus ? (hovered ? 1.6 : 1) : 0.2
       entry.stationMeshes.forEach((m) => {
         m.material.opacity = isFocus ? 1 : 0.12
       })
-      // 列车五件套同源明暗：车身 / 车窗 / 光晕 / 头灯 / 尾灯
+      if (entry.haloMat) entry.haloMat.opacity = isFocus ? (hovered ? 0.18 : 0.08) : 0.02
+      // 列车五件套同源明暗：车身 / 车窗 / 车顶 / 光晕 / 头灯 / 尾灯
       if (entry.trainMat) entry.trainMat.opacity = isFocus ? 1 : 0.16
-      if (entry.windowMat) entry.windowMat.opacity = isFocus ? 0.92 : 0.08
+      if (entry.windowMat) entry.windowMat.opacity = isFocus ? 0.95 : 0.08
+      if (entry.roofMat) entry.roofMat.opacity = isFocus ? 0.95 : 0.1
       if (entry.glowMat) entry.glowMat.opacity = isFocus ? 0.22 : 0.03
       if (entry.headMat) entry.headMat.opacity = isFocus ? 1 : 0.15
       if (entry.tailMat) entry.tailMat.opacity = isFocus ? 1 : 0.15
@@ -1353,6 +1407,10 @@ export class MetroScene {
         /* 个别版本无 dispose，忽略 */
       }
       this.composer = null
+    }
+    if (this._winTex) {
+      this._winTex.dispose()
+      this._winTex = null
     }
     this.controls.removeEventListener('controlstart', this._onUserInput)
     this.controls.dispose()
