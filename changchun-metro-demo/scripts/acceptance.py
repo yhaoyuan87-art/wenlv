@@ -47,7 +47,7 @@ def run():
         check('A3 站点周边景点层', 'layer=poi' in page.url and '站周边' in count, count)
 
         # 4. 打开景点详情抽屉
-        page.locator('.poi-strip .poi-card').first.click()
+        page.locator('.poi-tile').first.click()
         page.wait_for_timeout(1200)
         drawer = page.locator('.drawer')
         check('A4 景点详情抽屉打开', drawer.count() > 0 and drawer.is_visible())
@@ -65,11 +65,48 @@ def run():
         # ---- 任务 C：从景点开始了解城市 ----
         page.keyboard.press('3')
         page.wait_for_timeout(1500)
-        page.locator('.poi-strip .poi-card').first.click()
+        page.locator('.poi-tile').first.click()
         page.wait_for_timeout(1200)
         page.locator('.drawer .btn.link', has_text='最近地铁站').first.click()
         page.wait_for_timeout(1500)
         check('C1 详情跳转地铁站', 'layer=metro' in page.url and 'station=' in page.url, page.url)
+
+        # ---- 任务 D：进阶功能链路（方案 C / 列车 / 规划）----
+        # D1 聚焦线路 → 全线站名显示 → 点空白退出聚焦
+        page.goto(BASE + '/?layer=metro&line=line-02', wait_until='networkidle')
+        page.wait_for_timeout(4000)
+        n_focus = page.evaluate(
+            "() => [...document.querySelectorAll('.metro-station-label')].filter(e => e.style.display !== 'none').length"
+        )
+        check('D1 聚焦线路全站名显示', n_focus >= 22, f'{n_focus}/27')
+        page.mouse.click(120, 220)
+        page.wait_for_timeout(1000)
+        check('D2 点空白退出聚焦', 'line=' not in page.url, page.url)
+
+        # D3 站到站路径规划
+        page.goto(BASE + '/?layer=metro', wait_until='networkidle')
+        page.wait_for_timeout(1200)
+        page.locator('.view-btn', has_text='规划').click()
+        page.wait_for_timeout(300)
+        selects = page.locator('.route-select')
+        selects.nth(0).select_option(label='长春站')
+        page.wait_for_timeout(150)
+        selects.nth(1).select_option(label='卫星广场')
+        page.wait_for_timeout(600)
+        check('D3 路径规划出方案', page.locator('.route-card:not(.theme-card-mini)').count() == 1)
+
+        # D4 主题一日线时间轴
+        page.goto(BASE + '/?layer=poi&theme=theme-d1', wait_until='networkidle')
+        page.wait_for_timeout(1200)
+        check('D4 主题行程时间轴', page.locator('.tl-card').count() >= 4 and page.locator('.tl-hop-tag').count() >= 3)
+
+        # D5 2D 总览聚合气泡 + 摘要卡
+        page.keyboard.press('4')
+        page.wait_for_timeout(1200)
+        check('D5a 2D聚合气泡', page.locator('.map-agg-num').count() >= 5)
+        page.locator('polygon').last.click(force=True)
+        page.wait_for_timeout(600)
+        check('D5b 区划摘要卡', page.locator('.map-brief').count() == 1)
 
         check('无 JS 运行错误', len(errors) == 0, '; '.join(errors[:2]))
         browser.close()
