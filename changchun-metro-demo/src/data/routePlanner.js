@@ -14,6 +14,18 @@ import { metroLines } from './metroLines.js'
 const STOP_MINUTES = 2.2
 const TRANSFER_MINUTES = 4
 
+/**
+ * 三种规划策略的边权（分钟）：
+ * - fast：真实时间感（默认）
+ * - transfer：换乘重罚 → 最少换乘
+ * - stops：站数均权 → 最少站点
+ */
+const STRATEGIES = {
+  fast: { stop: STOP_MINUTES, transfer: TRANSFER_MINUTES },
+  transfer: { stop: 1, transfer: 12 },
+  stops: { stop: 1, transfer: 1 }
+}
+
 const nodes = new Map()
 
 function ensureNode(line, station) {
@@ -67,7 +79,7 @@ for (const group of byName.values()) {
   }
 }
 
-function dijkstra(originId, destId) {
+function dijkstra(originId, destId, w) {
   const origin = nodes.get(originId)
   const dest = nodes.get(destId)
   if (!origin || !dest) return null
@@ -89,7 +101,7 @@ function dijkstra(originId, destId) {
     visited.add(best)
     const node = nodes.get(best)
     for (const edge of node.edges) {
-      const nd = bestDist + edge.minutes
+      const nd = bestDist + (edge.kind === 'transfer' ? w.transfer : w.stop)
       if (nd < (dist.get(edge.to.stationId) ?? Infinity)) {
         dist.set(edge.to.stationId, nd)
         prev.set(edge.to.stationId, { node, kind: edge.kind })
@@ -110,21 +122,23 @@ function dijkstra(originId, destId) {
 }
 
 /**
- * 计算站到站最短时间路径。
+ * 计算站到站路径。
+ * @param strategy 'fast'（最快，默认）| 'transfer'（最少换乘）| 'stops'（最少站点）
  * @returns {null|{
- *   originId: string, destId: string,
+ *   originId: string, destId: string, strategy: string,
  *   stations: Array<{stationId,name,lineId,shortName,color,x,y,transferIn:boolean}>,
  *   segments: Array<{lineId,shortName,name,color,stationIds:string[],stops:number,toward,boardName,alightName}>,
  *   stops: number, transfers: number, minutes: number
  * }} 不可达 / 起终点相同 / 参数无效时返回 null
  */
-export function findRoute(originId, destId) {
+export function findRoute(originId, destId, strategy = 'fast') {
   if (!originId || !destId || originId === destId) return null
   // 同名跨线站是同一座物理车站（下拉框按名去重，3D 点选仍可能命中两个 id）
   const o = nodes.get(originId)
   const d = nodes.get(destId)
   if (!o || !d || o.name === d.name) return null
-  const chain = dijkstra(originId, destId)
+  const w = STRATEGIES[strategy] || STRATEGIES.fast
+  const chain = dijkstra(originId, destId, w)
   if (!chain) return null
 
   const stations = chain.map((c) => ({
@@ -168,13 +182,14 @@ export function findRoute(originId, destId) {
   let stops = 0
   let minutes = 0
   for (let i = 1; i < chain.length; i += 1) {
-    minutes += chain[i].kind === 'transfer' ? TRANSFER_MINUTES : STOP_MINUTES
+    minutes += chain[i].kind === 'transfer' ? w.transfer : w.stop
     if (chain[i].kind !== 'transfer') stops += 1
   }
 
   return {
     originId,
     destId,
+    strategy: STRATEGIES[strategy] ? strategy : 'fast',
     stations,
     segments,
     stops,

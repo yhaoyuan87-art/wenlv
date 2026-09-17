@@ -1004,14 +1004,21 @@ export class MetroScene {
     if (!route || !route.segments.length) return
     const group = new THREE.Group()
     const segs = []
+    const segMats = []
     let total = 0
     for (const seg of route.segments) {
       const entry = this.lineEntries[seg.lineId]
-      if (!entry) continue
+      if (!entry) {
+        segMats.push(null)
+        continue
+      }
       const pts = seg.stationIds
         .filter((sid) => sid in entry.stationIndexById)
         .map((sid) => entry.pts[entry.stationIndexById[sid]].clone().setY(entry.liftY + 0.5))
-      if (pts.length < 2) continue
+      if (pts.length < 2) {
+        segMats.push(null)
+        continue
+      }
       const glowMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(seg.color),
         transparent: true,
@@ -1023,6 +1030,7 @@ export class MetroScene {
       const cum = [0]
       for (let i = 1; i < pts.length; i += 1) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]))
       segs.push({ pts, cum, color: seg.color, base: total, len: cum[cum.length - 1] })
+      segMats.push(glowMat)
       total += cum[cum.length - 1]
     }
     if (!segs.length || total <= 0) {
