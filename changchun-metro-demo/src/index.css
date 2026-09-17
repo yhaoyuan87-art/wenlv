@@ -1506,6 +1506,255 @@ html.theme-light .layer-tab.on em {
   padding: 6px 18px;
 }
 
+/* ---------- 景点内容层：卡片目录 + mini 速览图（方案 C 改版） ---------- */
+.poi-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 14px;
+  padding: 10px 18px 16px;
+}
+
+.poi-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.poi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+.poi-empty {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 40px 0;
+}
+
+.poi-tile {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+  padding: 0;
+}
+
+.poi-tile:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.poi-tile.sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.poi-tile .ph-media {
+  border-radius: 0;
+}
+
+.poi-tile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 11px 11px;
+}
+
+.poi-tile-body b {
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.poi-tile-body > span {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.poi-tile-hot {
+  font-style: normal;
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--warm);
+  border: 1px solid var(--warm);
+  flex: none;
+}
+
+.poi-side {
+  width: 290px;
+  flex: none;
+  min-height: 0;
+}
+
+.mini-map-host {
+  position: sticky;
+  top: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.mini-map-cap {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  padding: 8px 11px 0;
+}
+
+/* 主题一日线：竖排行程时间轴 */
+.theme-timeline {
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.tl-head {
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 12px;
+  margin-bottom: 16px;
+}
+
+.tl-head b {
+  font-size: 14px;
+}
+
+.tl-head span {
+  margin-left: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.tl-head p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.tl-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.tl-item {
+  display: flex;
+  gap: 12px;
+}
+
+.tl-idx {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 10px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #08101e;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+}
+
+.tl-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 12px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.tl-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.tl-card.sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.tl-card .ph-media {
+  width: 150px;
+  flex: none;
+  border-radius: 0;
+}
+
+.tl-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.tl-card-body b {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.tl-card-body span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tl-hop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  margin-left: 11px;
+  padding-left: 18px;
+  border-left: 2px dashed var(--border-strong);
+}
+
+.tl-hop-tag {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--inset-bg);
+  border: 1px solid var(--border);
+  padding: 1px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.tl-tip {
+  margin-top: 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
 .poi-strip {
   flex: none;
   display: flex;
@@ -1595,6 +1844,14 @@ html.theme-light .layer-tab.on em {
   color: var(--muted);
 }
 
+/* 区划聚合气泡里的景点数 */
+.map-agg-num {
+  fill: #d7e6ff;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
 .map2d-host {
   flex: 1;
   min-height: 0;
@@ -1602,6 +1859,186 @@ html.theme-light .layer-tab.on em {
   align-items: center;
   justify-content: center;
   padding: 6px 18px 16px;
+  position: relative;
+}
+
+/* 2D 层：主题线图例（ThemePicker 只留在景点层） */
+.map-theme-legend {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin: 4px 18px 0;
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 13px;
+}
+
+.map-theme-legend i {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.map-theme-legend b {
+  font-size: 12px;
+}
+
+.map-theme-legend span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.map-theme-legend button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.map-theme-legend button:hover {
+  color: var(--accent);
+}
+
+/* 2D 层：跨层摘要卡（点区划/线路/站点弹出）；放左上避开右侧 InfoPanel */
+.map-brief {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 6;
+  width: min(300px, calc(100% - 28px));
+  max-height: calc(100% - 28px);
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  animation: routeIn 0.22s ease;
+}
+
+.map-brief-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-brief-head i {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  flex: none;
+}
+
+.map-brief-head b {
+  flex: 1;
+  font-size: 13.5px;
+}
+
+.map-brief-close {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.map-brief-close:hover {
+  color: var(--text);
+}
+
+.map-brief-sub {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.map-brief-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 9px;
+}
+
+.map-brief-rows span {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.map-brief-rows em,
+.map-brief-top em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 5px;
+}
+
+.map-brief-top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.map-brief-top button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--inset-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 9px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.18s;
+}
+
+.map-brief-top button:hover {
+  border-color: var(--accent);
+}
+
+.map-brief-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.map-brief-actions button {
+  flex: 1;
+  font-size: 12px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--inset-bg-strong);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+
+.map-brief-actions button:first-child {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.map-brief-actions button:hover {
+  border-color: var(--accent);
 }
 
 .map2d-wrap {
@@ -3088,7 +3525,28 @@ textarea:focus-visible,
 
 /* ===================== 移动端：路径规划 / 跟随 ===================== */
 @media (max-width: 720px) {
-  /* 底部控件 6 个按钮，小屏收窄内边距防溢出 */
+  /* 景点内容层：手机上收起 mini 速览图，纯目录流（2D 总览层承担地图职责） */
+  .poi-body {
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 8px 12px 14px;
+  }
+
+  .poi-main {
+    overflow: visible;
+    flex: none;
+  }
+
+  .poi-side {
+    display: none;
+  }
+
+  /* 2D 摘要卡贴满宽度 */
+  .map-brief {
+    top: 8px;
+    right: 8px;
+  }
+
   .view-controls {
     left: 12px;
     bottom: 12px;

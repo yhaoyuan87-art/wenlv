@@ -60,7 +60,8 @@ export const useStore = create((set, get) => ({
   poiScope: 'station',
   categoryFilter: null,
   themeId: initial.themeId,
-  mapVisibility: { districts: true, lines: true, stations: true, pois: true, labels: true },
+  // 2D 总览默认用「区划聚合气泡」代替景点散点（中观关系视图）；可手动开回散点
+  mapVisibility: { districts: true, lines: true, stations: true, pois: false, labels: true },
   // 详情面板对 3D 视野的遮挡量（px）。3D 相机据此把视觉中心移到「未被挡住的区域」中心
   panelInsets: { right: 0, bottom: 0 },
   // 3D 层处于 WebGL 降级态：详情面板据此让位，避免遮挡兜底卡片

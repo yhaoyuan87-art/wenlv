@@ -29,6 +29,7 @@ export default function City2DMap({
   filterPoiIds = null,
   highlight = {},
   routePoiIds = null,
+  districtPoiCounts = null,
   onSelect,
   showPoiNames = 'all',
   poiSize = 7
@@ -212,6 +213,41 @@ export default function City2DMap({
               </text>
             ) : null
           )}
+
+        {/* 区划景点聚合气泡：中观视图用数字代替逐点散布，点击等同点区划 */}
+        {show.districts &&
+          districtPoiCounts &&
+          districtPoiCounts.map(({ id, count }) => {
+            const d = districts.find((x) => x.districtId === id)
+            if (!d || !count) return null
+            const cx = d.label[0]
+            const cy = d.label[1] + 26
+            const isHL = highlight.districtId === id
+            return (
+              <g
+                key={'agg-' + id}
+                className="map-agg map-clickable"
+                onClick={() => onSelect && onSelect('district', id)}
+              >
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={isHL ? 15 : 13}
+                  fill="#0a0f1c"
+                  fillOpacity="0.85"
+                  stroke={d.color}
+                  strokeWidth={isHL ? 2.5 : 1.5}
+                  strokeOpacity="0.95"
+                />
+                <text x={cx} y={cy + 4} textAnchor="middle" className="map-agg-num">
+                  {count}
+                </text>
+                <title>
+                  {d.name} · {count} 个景点
+                </title>
+              </g>
+            )
+          })}
 
         {show.stations &&
           show.labels &&
