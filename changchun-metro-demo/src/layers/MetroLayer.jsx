@@ -12,6 +12,12 @@ const VIEWS = [
   { id: 'reset', label: '重置' }
 ]
 
+const STRATS = [
+  { id: 'fast', label: '最快' },
+  { id: 'transfer', label: '少换乘' },
+  { id: 'stops', label: '少站点' }
+]
+
 export default function MetroLayer() {
   const hostRef = useRef(null)
   const sceneRef = useRef(null)
@@ -31,6 +37,9 @@ export default function MetroLayer() {
   const [route, setRoute] = useState(null)
   const [follow, setFollow] = useState(false)
   const [section, setSection] = useState(false)
+  const [strategy, setStrategy] = useState('fast')
+  // 策略要被 render 外的回调（3D 点选）读到，镜像成 ref
+  const strategyRef = useRef('fast')
   // 主题路线纯派生：景点站串联（相邻段 findRoute + 同线合并），无需 effect/state
   const themeRoute = useMemo(() => {
     if (!themeMeta) return null
@@ -81,16 +90,27 @@ export default function MetroLayer() {
     }
     if (stationId === origin) return
     setDestId(stationId)
-    const r = findRoute(origin, stationId)
+    const r = findRoute(origin, stationId, strategyRef.current)
     setRoute(r)
     showActiveRoute(r)
   }
 
   /** 由下拉框改动触发：双点齐了就算路，否则清掉旧路线 */
   const applyRoute = (o, d) => {
-    const r = o && d ? findRoute(o, d) : null
+    const r = o && d ? findRoute(o, d, strategyRef.current) : null
     setRoute(r)
     showActiveRoute(r)
+  }
+
+  /** 切换规划策略：按当前起终点立即重算 */
+  const changeStrategy = (id) => {
+    setStrategy(id)
+    strategyRef.current = id
+    if (originId && destId) {
+      const r = findRoute(originId, destId, id)
+      setRoute(r)
+      showActiveRoute(r)
+    }
   }
 
   const swapRoute = () => {
@@ -141,8 +161,11 @@ export default function MetroLayer() {
       // 挂载时已有激活路线（带 ?theme= 直进 / 规划态残留 / 收藏路线）则立即上屏
       const activeRoute = latestRef.current.route || latestRef.current.myRoute || latestRef.current.themeRoute
       if (activeRoute) scene.showRoute(activeRoute)
-      // 电影式开场：只在「无深链上下文」时播放（场景内部还会做每会话一次的节流）
-      if (!store.stationId && !store.lineId) scene.playIntro()
+      // 入场运镜：城市层带区划下来 → 区划上空下潜；裸进 → 电影式开场（每会话一次）
+      if (!store.stationId && !store.lineId) {
+        if (store.districtId) scene.playDive(store.districtId)
+        else scene.playIntro()
+      }
     } catch (err) {
       // 创建渲染器 / 场景抛错时同样走兜底，避免整页白屏
       console.error('[MetroLayer] 3D 场景初始化失败，已降级为提示卡片', err)
@@ -329,6 +352,17 @@ export default function MetroLayer() {
               {renderStationOptions()}
             </select>
           </div>
+          <div className="route-strats">
+            {STRATS.map((s) => (
+              <button
+                key={s.id}
+                className={'chip' + (strategy === s.id ? ' on' : '')}
+                onClick={() => changeStrategy(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
           <p className="route-hint">提示：开启规划后，直接点击 3D 站点也能依次设为起、终点</p>
         </div>
       )}
@@ -353,7 +387,11 @@ export default function MetroLayer() {
                   ) : (
                     <div className="route-back">在 {seg.boardName} 原线折返</div>
                   ))}
-                <div className="route-seg">
+                <div
+                  className="route-seg"
+                  onMouseEnter={() => sceneRef.current?.emphasizeSegment(i)}
+                  onMouseLeave={() => sceneRef.current?.emphasizeSegment(null)}
+                >
                   <span className="route-badge" style={{ background: seg.color }}>
                     {seg.shortName.replace('号线', '')}
                   </span>

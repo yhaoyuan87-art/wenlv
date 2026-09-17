@@ -3,6 +3,8 @@ import { CityScene } from '../three/CityScene.js'
 import { shouldFallback3D } from '../three/webgl.js'
 import WebGLFallback from '../components/WebGLFallback.jsx'
 import { useStore } from '../store/useStore.js'
+import { poisByDistrict, getCategory } from '../data/pois.js'
+import { getDistrict } from '../data/districts.js'
 
 const VIEWS = [
   { id: 'pano', label: '全景' },
@@ -14,6 +16,8 @@ export default function CityLayer() {
   const hostRef = useRef(null)
   const sceneRef = useRef(null)
   const [view, setView] = useState('pano')
+  // 地标预览卡：点地标弹出该区代表景点速览
+  const [preview, setPreview] = useState(null)
   // WebGL 不可用（或 ?nowebgl=1 强制）时不构造 3D 场景，直接渲染兜底 UI
   const [unsupported, setUnsupported] = useState(() => shouldFallback3D())
 
@@ -29,6 +33,7 @@ export default function CityLayer() {
         },
         onSelectLandmark: (lm) => {
           if (lm.districtId) useStore.getState().selectDistrict(lm.districtId)
+          setPreview({ name: lm.name, districtId: lm.districtId || null })
         }
       })
       scene.setReduceMotion(store.reduceMotion)
@@ -106,6 +111,9 @@ export default function CityLayer() {
 
   if (unsupported) return <WebGLFallback layer="city" />
 
+  const previewDistrict = preview && preview.districtId ? getDistrict(preview.districtId) : null
+  const previewPois = preview && preview.districtId ? poisByDistrict(preview.districtId).slice(0, 3) : []
+
   return (
     <div className="three-host" ref={hostRef}>
       <div className="view-controls">
@@ -119,6 +127,39 @@ export default function CityLayer() {
           </button>
         ))}
       </div>
+
+      {preview && (
+        <div className="city-preview" key={preview.name}>
+          <div className="city-preview-head">
+            <b>{preview.name}</b>
+            <button className="city-preview-close" onClick={() => setPreview(null)} aria-label="关闭">
+              ×
+            </button>
+          </div>
+          {previewDistrict && <span className="city-preview-sub">{previewDistrict.name} · {previewDistrict.intro.slice(0, 24)}…</span>}
+          {previewPois.length > 0 && (
+            <div className="city-preview-pois">
+              {previewPois.map((p) => (
+                <button key={p.poiId} onClick={() => useStore.getState().openDrawer(p.poiId)}>
+                  <i className="cat-dot" style={{ background: getCategory(p.category).color }} />
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {previewDistrict && (
+            <button
+              className="city-preview-go"
+              onClick={() => {
+                useStore.getState().setPoiScope('district')
+                useStore.getState().goLayer('poi')
+              }}
+            >
+              看本区全部景点
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

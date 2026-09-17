@@ -484,6 +484,26 @@ export class MetroScene {
       this.scene.add(labelObj)
       this.ghostEntries.push({ mat, phase: gi * 2.1 })
     })
+
+    // 龙嘉机场航线示意：长春站 → 机场的暖色虚线大弧，与 9 号线「空港方向」规划呼应
+    const pa = toXZ(549, 262) // 长春站
+    const pb = toXZ(1260, 300) // 龙嘉机场
+    const va = new THREE.Vector3(pa.X, 12, pa.Z)
+    const vb = new THREE.Vector3(pb.X, 12, pb.Z)
+    const midV = va.clone().add(vb).multiplyScalar(0.5)
+    midV.y = 150
+    const arcCurve = new THREE.QuadraticBezierCurve3(va, midV, vb)
+    const arcMat = new THREE.LineDashedMaterial({
+      color: 0xffb457,
+      dashSize: 7,
+      gapSize: 6,
+      transparent: true,
+      opacity: 0.55
+    })
+    const arc = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcCurve.getPoints(72)), arcMat)
+    arc.computeLineDistances()
+    this.scene.add(arc)
+    this.ghostEntries.push({ mat: arcMat, phase: 4.2, base: 0.55 })
   }
 
   /**
@@ -667,26 +687,53 @@ export class MetroScene {
     const entry = this.lineEntries['line-01']
     if (!entry) return false
     const mid = entry.pts[Math.floor(entry.pts.length / 2)]
-    this._intro = {
-      t: 0,
-      dur: 4.4,
-      keys: [
+    this._startIntro(
+      [
         // 起步：贴轨低位沿行进方向前探（像坐在车头上）
         { pos: new THREE.Vector3(mid.x + 12, 7, mid.z + 30), look: new THREE.Vector3(mid.x - 70, 9, mid.z - 90) },
         // 中段：翻出地面，城市边缘入画
         { pos: new THREE.Vector3(-30, 230, 330), look: new THREE.Vector3(0, 0, 0) },
         // 落幅：默认全网机位（与 resetView 一致）
         { pos: new THREE.Vector3(-80, 420, 560), look: new THREE.Vector3(0, 0, 0) }
-      ]
-    }
+      ],
+      4.4,
+      true
+    )
+    return true
+  }
+
+  /**
+   * 「从城市层下来」的下潜入场：从所选区划上空俯冲到全网机位。
+   * 与 playIntro 共用镜头机制但不占用开场次数，每次带区划上下文进入都播。
+   */
+  playDive(districtId) {
+    if (this.reduceMotion || this._intro) return false
+    const d = districts.find((x) => x.districtId === districtId)
+    if (!d) return false
+    const { X, Z } = toXZ(d.label[0], d.label[1])
+    this._startIntro(
+      [
+        { pos: new THREE.Vector3(X - 20, 640, Z + 70), look: new THREE.Vector3(X, 0, Z) },
+        { pos: new THREE.Vector3(-60, 430, 480), look: new THREE.Vector3(0, 0, 0) },
+        { pos: new THREE.Vector3(-80, 420, 560), look: new THREE.Vector3(0, 0, 0) }
+      ],
+      2.2,
+      false
+    )
+    return true
+  }
+
+  _startIntro(keys, dur, persist) {
+    this._intro = { t: 0, dur, keys }
     this.controls.enabled = false
     this.lastView = null
-    try {
-      sessionStorage.setItem('ccmetro-intro', '1')
-    } catch {
-      /* 无痕模式等场景下存不进去也就每页播放一次，无碍 */
+    if (persist) {
+      try {
+        sessionStorage.setItem('ccmetro-intro', '1')
+      } catch {
+        /* 无痕模式等场景下存不进去也就每页播放一次，无碍 */
+      }
     }
-    return true
   }
 
   /** 结束开场；settle=true 时无动画落位到默认机位，false 交由调用方接管镜头 */
@@ -1118,7 +1165,7 @@ export class MetroScene {
       if (mesh) pulseMeshes.push({ mesh, base: mesh.scale.clone() })
     }
 
-    this.route = { group, inst, states, segs, total, rings, flags, pulseMeshes }
+    this.route = { group, inst, states, segs, segMats, total, rings, flags, pulseMeshes }
     this.routeLineIds = new Set(route.segments.map((s) => s.lineId))
     this.scene.add(group)
     this._applyFocus()
@@ -1162,6 +1209,16 @@ export class MetroScene {
       if (off >= segs[i].base) return i
     }
     return 0
+  }
+
+  /** 行程卡 hover 联动：高亮对应乘车段的光晕，其余段压暗；null 恢复 */
+  emphasizeSegment(idx) {
+    const r = this.route
+    if (!r || !r.segMats) return
+    r.segMats.forEach((m, i) => {
+      if (!m) return
+      m.opacity = idx == null ? 0.3 : i === idx ? 0.62 : 0.1
+    })
   }
 
   _updateRoute(dt) {
@@ -1445,10 +1502,12 @@ export class MetroScene {
     this.labelRenderer.render(this.scene, this.camera)
   }
 
-  /** 幽灵层呼吸 */
+  /** 幽灵层呼吸（base 可选：机场弧线用更高基准透明度） */
   _updateGhost() {
     for (const g of this.ghostEntries) {
-      g.mat.opacity = 0.38 + 0.16 * Math.sin(this.elapsed * 1.8 + g.phase)
+      const base = g.base || 0.38
+      const amp = g.base ? 0.12 : 0.16
+      g.mat.opacity = base + amp * Math.sin(this.elapsed * 1.8 + g.phase)
     }
   }
 

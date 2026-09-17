@@ -311,6 +311,8 @@ export class CityScene {
       const labelDiv = document.createElement('div')
       labelDiv.className = 'landmark-label'
       labelDiv.textContent = lm.name
+      // 标签可点击：与区划标签一致，点名字即选中地标（弹预览卡）
+      labelDiv.addEventListener('click', () => this.callbacks.onSelectLandmark(lm))
       const labelObj = new CSS2DObject(labelDiv)
       labelObj.position.set(X, lm.h + 8, Z)
       this.scene.add(labelObj)

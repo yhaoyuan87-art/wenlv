@@ -700,6 +700,8 @@ html.theme-light .layer-tab.on em {
 }
 
 .landmark-label {
+  pointer-events: auto;
+  cursor: pointer;
   font-size: 11px;
   color: var(--landmark-label);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
@@ -857,6 +859,15 @@ html.theme-light .layer-tab.on em {
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--muted);
+}
+
+/* 规划策略切换：最快 / 少换乘 / 少站点 */
+.route-strats {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
 }
 
 .route-card {
@@ -1822,6 +1833,98 @@ html.theme-light .layer-tab.on em {
   color: var(--muted);
   background: transparent;
   cursor: default;
+}
+
+/* ---------- 城市层：地标预览卡 ---------- */
+.city-preview {
+  position: absolute;
+  left: 18px;
+  bottom: 70px;
+  z-index: 13;
+  width: min(280px, calc(100vw - 36px));
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  animation: routeIn 0.22s ease;
+}
+
+.city-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.city-preview-head b {
+  flex: 1;
+  font-size: 13.5px;
+}
+
+.city-preview-close {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.city-preview-close:hover {
+  color: var(--text);
+}
+
+.city-preview-sub {
+  display: block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.city-preview-pois {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 9px;
+}
+
+.city-preview-pois button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--inset-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 9px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.18s;
+}
+
+.city-preview-pois button:hover {
+  border-color: var(--accent);
+}
+
+.city-preview-go {
+  width: 100%;
+  margin-top: 10px;
+  font-size: 12px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.city-preview-go:hover {
+  background: var(--accent);
+  color: var(--on-accent-text);
 }
 
 .poi-strip {

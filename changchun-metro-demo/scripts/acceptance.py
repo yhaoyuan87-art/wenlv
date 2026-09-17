@@ -39,7 +39,12 @@ def run():
         # 3. 选线路 → 选站点 → 查看站点周边景点
         page.locator('.info-panel .line-badge.clickable', has_text='4号线').first.click()
         page.wait_for_timeout(1500)
-        page.locator('.info-panel .chain-stop', has_text='伪满皇宫').first.click()
+        try:
+            page.locator('.info-panel .chain-stop', has_text='伪满皇宫').first.click(timeout=8000)
+        except Exception:
+            page.screenshot(path='acceptance-a3-fail.png')
+            print('[DEBUG] A3 失败现场已存 acceptance-a3-fail.png')
+            raise
         page.wait_for_timeout(1200)
         page.locator('.info-panel .btn.primary').first.click()
         page.wait_for_timeout(1500)
