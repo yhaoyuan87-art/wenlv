@@ -332,6 +332,7 @@ export class MetroScene {
         this.stationLabelObjs[s.stationId] = labelObj
         this.labelCandidates.push({
           stationId: s.stationId,
+          lineId: line.lineId,
           obj: labelObj,
           prio: isTransfer ? 2 : 1,
           // 实际包围盒在 updateLabelMetrics() 里按档位换算，这里只存原始参数
@@ -799,7 +800,11 @@ export class MetroScene {
     }
     const hit = this.tapHit || this.pick()
     this.tapHit = null
-    if (!hit) return
+    if (!hit) {
+      // 点空白处：通知上层清除聚焦（选中的线路/站点），否则聚焦后无法退出
+      this.callbacks.onEmptyClick?.()
+      return
+    }
     if (hit.userData.type === 'station') this.callbacks.onSelectStation(hit.userData.stationId)
     else if (hit.userData.type === 'line') this.callbacks.onSelectLine(hit.userData.lineId)
     else if (hit.userData.type === 'train') this.startFollow(hit.userData.train)
@@ -1187,6 +1192,8 @@ export class MetroScene {
     const usedNames = new Set()
     for (const line of metroLines) {
       const isFocus = !lineId || line.lineId === lineId
+      // 聚焦某条线路时，该线全部站点名都显示（非聚焦线仍只留换乘站/选中站）
+      const allLine = lineId && line.lineId === lineId
       for (const s of line.stations) {
         const el = this.stationLabels[s.stationId]
         const obj = this.stationLabelObjs[s.stationId]
@@ -1194,7 +1201,7 @@ export class MetroScene {
         const hasPoi = poisByStation(s.stationId).length > 0
         const isTransfer = (s.transfer || []).length > 0
         const isSel = s.stationId === stationId
-        let show = isSel || (isFocus && (isTransfer || hasPoi))
+        let show = isSel || allLine || (isFocus && (isTransfer || hasPoi))
         if (show && usedNames.has(s.name) && !isSel) show = false
         if (show) usedNames.add(s.name)
         this.labelSemantic[s.stationId] = show
@@ -1224,6 +1231,8 @@ export class MetroScene {
         continue
       }
       cands.push({
+        stationId: c.stationId,
+        lineId: c.lineId,
         prio: c.prio,
         w: c.w,
         h: c.h,
@@ -1232,13 +1241,54 @@ export class MetroScene {
         sy: (-v.y * 0.5 + 0.5) * h
       })
     }
-    cands.sort((a, b) => b.prio - a.prio)
+
+    const hits = (box, placed) => placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
+    // 行 r 的包围盒：r=0 紧贴锚点，r 增大逐行远离（上方 / 下方两侧独立编号）
+    const band = (c, r, above) =>
+      above
+        ? { x1: c.sx - c.w / 2, x2: c.sx + c.w / 2, y1: c.sy - (r + 1) * c.h, y2: c.sy - r * c.h }
+        : { x1: c.sx - c.w / 2, x2: c.sx + c.w / 2, y1: c.sy + r * c.h, y2: c.sy + (r + 1) * c.h }
+
+    // 聚焦线路（且无规划叠加）时：该线站名「全部显示」，按屏幕 x 排序后
+    // 上/下各最多 3 行贪心堆叠；行高用 CSS2DObject.center 百分比锚点实现
+    const focusActive = this.selectedLineId && !this.routeLineIds
+    const focused = focusActive ? cands.filter((c) => c.lineId === this.selectedLineId) : []
+    const others = focusActive ? cands.filter((c) => c.lineId !== this.selectedLineId) : cands
+
     const placed = []
-    for (const c of cands) {
-      const box = { x1: c.sx - c.w / 2, x2: c.sx + c.w / 2, y1: c.sy - c.h, y2: c.sy }
-      const collides = placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
+    others.sort((a, b) => b.prio - a.prio)
+    for (const c of others) {
+      const box = band(c, 0, true)
+      const collides = hits(box, placed)
       c.obj.visible = !collides
-      if (!collides) placed.push(box)
+      if (collides) continue
+      c.obj.center.set(0.5, 1) // 锚点 = 元素底部中位（挂在站点上方）
+      placed.push(box)
+    }
+
+    focused.sort((a, b) => b.prio - a.prio || a.sx - b.sx)
+    const MAX_ROW = 3
+    for (const c of focused) {
+      let done = false
+      for (let r = 0; r < MAX_ROW && !done; r += 1) {
+        const box = band(c, r, true)
+        if (!hits(box, placed)) {
+          c.obj.center.set(0.5, 1 + r)
+          c.obj.visible = true
+          placed.push(box)
+          done = true
+        }
+      }
+      for (let r = 0; r < MAX_ROW && !done; r += 1) {
+        const box = band(c, r, false)
+        if (!hits(box, placed)) {
+          c.obj.center.set(0.5, -r)
+          c.obj.visible = true
+          placed.push(box)
+          done = true
+        }
+      }
+      if (!done) c.obj.visible = false
     }
   }
 

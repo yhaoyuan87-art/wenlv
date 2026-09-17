@@ -123,7 +123,13 @@ export default function MetroLayer() {
         },
         onSelectLine: (lineId) => useStore.getState().selectLine(lineId),
         onFollowChange: (v) => setFollow(v),
-        onSectionChange: (v) => setSection(v)
+        onSectionChange: (v) => setSection(v),
+        // 点空白处退出聚焦：清掉选中的线路/站点（规划面板打开时不干预）
+        onEmptyClick: () => {
+          if (latestRef.current.open) return
+          const s = useStore.getState()
+          if (s.lineId || s.stationId) s.selectLine(null)
+        }
       })
       scene.setReduceMotion(store.reduceMotion)
       scene.setTheme()
