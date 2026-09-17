@@ -3,18 +3,19 @@ import City2DMap from '../components/City2DMap.jsx'
 import ThemePicker from '../components/ThemePicker.jsx'
 import { PlaceholderMedia } from '../components/PlaceholderMedia.jsx'
 import { useStore } from '../store/useStore.js'
-import { poisByStation, poisByLine, poisByDistrict, pois, poiCategories, getCategory } from '../data/pois.js'
+import { poisByStation, poisByLine, poisByDistrict, pois, poiCategories, getCategory, getPoi } from '../data/pois.js'
 import { getMedia } from '../data/media.js'
 import { getStation, getLine } from '../data/metroLines.js'
 import { getDistrict } from '../data/districts.js'
 import { themePois, getTheme } from '../data/themes.js'
-import { findRoute } from '../data/routePlanner.js'
+import { findRoute, buildChainRoute } from '../data/routePlanner.js'
 
 const SCOPES = [
   { id: 'station', label: '本站周边' },
   { id: 'line', label: '本线路' },
   { id: 'district', label: '本区域' },
-  { id: 'all', label: '全城' }
+  { id: 'all', label: '全城' },
+  { id: 'fav', label: '我的收藏' }
 ]
 
 export default function PoiLayer() {
@@ -25,6 +26,9 @@ export default function PoiLayer() {
   const poiScope = useStore((s) => s.poiScope)
   const categoryFilter = useStore((s) => s.categoryFilter)
   const themeId = useStore((s) => s.themeId)
+  const favorites = useStore((s) => s.favorites)
+  const setMyRoute = useStore((s) => s.setMyRoute)
+  const goLayer = useStore((s) => s.goLayer)
   const setPoiScope = useStore((s) => s.setPoiScope)
   const setCategoryFilter = useStore((s) => s.setCategoryFilter)
   const openDrawer = useStore((s) => s.openDrawer)
@@ -39,15 +43,18 @@ export default function PoiLayer() {
         ? 'line'
         : poiScope === 'district' && districtId
           ? 'district'
-          : 'all'
+          : poiScope === 'fav'
+            ? 'fav'
+            : 'all'
 
   const scoped = useMemo(() => {
     if (themeId) return themePois(themeId)
     if (effectiveScope === 'station') return poisByStation(stationId)
     if (effectiveScope === 'line') return poisByLine(lineId)
     if (effectiveScope === 'district') return poisByDistrict(districtId)
+    if (effectiveScope === 'fav') return favorites.map((id) => getPoi(id)).filter(Boolean)
     return pois
-  }, [effectiveScope, stationId, lineId, districtId, themeId])
+  }, [effectiveScope, stationId, lineId, districtId, themeId, favorites])
 
   const filtered = useMemo(
     () => (categoryFilter ? scoped.filter((p) => p.category === categoryFilter) : scoped),
@@ -68,6 +75,7 @@ export default function PoiLayer() {
       return l ? `${l.name}沿线` : null
     }
     if (effectiveScope === 'district' && district) return district.name
+    if (effectiveScope === 'fav') return '我的收藏'
     return '全城景点'
   })()
 
@@ -89,6 +97,15 @@ export default function PoiLayer() {
   const onSelect = (type, id) => {
     if (type === 'poi') openDrawer(id)
     else if (type === 'station') selectStation(id)
+  }
+
+  // 收藏 ≥2 个时：按收藏顺序串成「我的路线」，地铁层复用流光动画演示
+  const genMyRoute = () => {
+    const ids = filtered.map((p) => p.stationIds && p.stationIds[0]).filter(Boolean)
+    const r = buildChainRoute(ids, null)
+    if (!r) return
+    setMyRoute(r)
+    goLayer('metro')
   }
 
   return (
@@ -136,6 +153,14 @@ export default function PoiLayer() {
 
       <div className="poi-body">
         <div className="poi-main">
+          {effectiveScope === 'fav' &&
+            (filtered.length >= 2 ? (
+              <button className="my-route-btn" onClick={genMyRoute}>
+                串成我的路线 · 去地铁层看流光演示
+              </button>
+            ) : (
+              <div className="my-route-btn ghost">在景点详情里点「收藏」，凑满 2 个就能一键串成路线</div>
+            ))}
           {theme ? (
             <div className="theme-timeline">
               {themeList.map((p, i) => (

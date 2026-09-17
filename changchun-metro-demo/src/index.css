@@ -1755,6 +1755,75 @@ html.theme-light .layer-tab.on em {
   color: var(--muted);
 }
 
+/* ---------- 收藏 + 我的路线 ---------- */
+.fav-btn {
+  position: absolute;
+  top: 12px;
+  right: 44px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--inset-bg-chip);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: all 0.2s;
+}
+
+.fav-btn i {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid var(--muted);
+  transition: all 0.2s;
+}
+
+.fav-btn.on {
+  color: var(--warm);
+  border-color: var(--warm);
+}
+
+.fav-btn.on i {
+  border-bottom-color: var(--warm);
+  transform: rotate(0deg) scale(1.15);
+}
+
+.fav-btn:hover {
+  border-color: var(--warm);
+  color: var(--warm);
+}
+
+.my-route-btn {
+  width: 100%;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.my-route-btn:hover {
+  background: var(--accent);
+  color: var(--on-accent-text);
+}
+
+.my-route-btn.ghost {
+  border-style: dashed;
+  color: var(--muted);
+  background: transparent;
+  cursor: default;
+}
+
 .poi-strip {
   flex: none;
   display: flex;
@@ -3541,10 +3610,10 @@ textarea:focus-visible,
     display: none;
   }
 
-  /* 2D 摘要卡贴满宽度 */
+  /* 2D 摘要卡贴满宽度（桌面在左上，移动端同样靠左） */
   .map-brief {
     top: 8px;
-    right: 8px;
+    left: 8px;
   }
 
   .view-controls {
@@ -3562,7 +3631,24 @@ textarea:focus-visible,
     left: 12px;
     bottom: 66px;
     width: calc(100vw - 24px);
+    max-height: 62vh;
+    overflow: auto;
     padding: 10px 12px;
+  }
+
+  /* 窄屏下起终点纵向堆叠，select 明确高度防被 flex 拉伸 */
+  .route-fields {
+    flex-wrap: wrap;
+  }
+
+  .route-select {
+    flex: 1 1 100%;
+    height: 36px;
+  }
+
+  .route-swap {
+    flex: 1 1 100%;
+    padding: 6px 9px;
   }
 
   .route-card {

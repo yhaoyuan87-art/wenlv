@@ -23,6 +23,8 @@ export default function MetroLayer() {
   const themeId = useStore((s) => s.themeId)
   const themeMeta = useMemo(() => (themeId ? getTheme(themeId) : null), [themeId])
   const stationId = useStore((s) => s.stationId)
+  const myRoute = useStore((s) => s.myRoute)
+  const setMyRoute = useStore((s) => s.setMyRoute)
   const [plannerOpen, setPlannerOpen] = useState(false)
   const [originId, setOriginId] = useState(null)
   const [destId, setDestId] = useState(null)
@@ -39,10 +41,10 @@ export default function MetroLayer() {
   }, [themeMeta])
   // 场景回调与 zustand 订阅是「 render 外」的入口，读不到最新 state 闭包，
   // 用一个快照 ref 在 effect 里同步（不违反 render 期间不可写 ref 的约束）
-  const latestRef = useRef({ open: false, origin: null, dest: null, route: null, themeRoute: null })
+  const latestRef = useRef({ open: false, origin: null, dest: null, route: null, themeRoute: null, myRoute: null })
   useEffect(() => {
-    latestRef.current = { open: plannerOpen, origin: originId, dest: destId, route, themeRoute }
-  }, [plannerOpen, originId, destId, route, themeRoute])
+    latestRef.current = { open: plannerOpen, origin: originId, dest: destId, route, themeRoute, myRoute }
+  }, [plannerOpen, originId, destId, route, themeRoute, myRoute])
 
   const options = useMemo(() => stationOptions(), [])
 
@@ -50,22 +52,22 @@ export default function MetroLayer() {
   const isFollowing = () => !!sceneRef.current?.followTrain
 
   /**
-   * 统一路线上屏入口，优先级：规划路线 > 主题一日线 > 清空。
+   * 统一路线上屏入口，优先级：规划路线 > 我的路线 > 主题一日线 > 清空。
    * 传 plannerRoute 用于「本轮 setState 还没进 ref」的同步调用场景。
    */
   const showActiveRoute = (plannerRoute) => {
     const scene = sceneRef.current
     if (!scene) return
     const active = plannerRoute !== undefined ? plannerRoute : latestRef.current.route
-    const target = active || latestRef.current.themeRoute
+    const target = active || latestRef.current.myRoute || latestRef.current.themeRoute
     if (target) scene.showRoute(target)
     else scene.clearRoute()
   }
 
-  // 主题路线变化（含清空）→ 重上屏（规划路线仍在时自动让位）
+  // 主题 / 我的路线变化（含清空）→ 重上屏（规划路线仍在时自动让位）
   useEffect(() => {
     showActiveRoute()
-  }, [themeRoute])
+  }, [themeRoute, myRoute])
 
   /** 把 3D 点击的站点填进起/终点：无起点→起点；已有双点→重设起点 */
   const pickPlannerStation = (stationId) => {
@@ -136,8 +138,8 @@ export default function MetroLayer() {
       scene.setPanelInsets(store.panelInsets)
       if (store.lineId) scene.highlightLine(store.lineId, store.stationId)
       if (store.stationId) scene.focusStation(store.stationId)
-      // 挂载时已有激活路线（带 ?theme= 直进 / 规划态残留）则立即上屏
-      const activeRoute = latestRef.current.route || latestRef.current.themeRoute
+      // 挂载时已有激活路线（带 ?theme= 直进 / 规划态残留 / 收藏路线）则立即上屏
+      const activeRoute = latestRef.current.route || latestRef.current.myRoute || latestRef.current.themeRoute
       if (activeRoute) scene.showRoute(activeRoute)
       // 电影式开场：只在「无深链上下文」时播放（场景内部还会做每会话一次的节流）
       if (!store.stationId && !store.lineId) scene.playIntro()
@@ -370,7 +372,32 @@ export default function MetroLayer() {
         </div>
       )}
 
-      {!route && themeRoute && themeMeta && (
+      {!route && myRoute && (
+        <div className="route-card my-route-card">
+          <div className="route-card-head">
+            <b style={{ color: 'var(--accent)' }}>我的路线</b>
+            <span className="route-sum">
+              {myRoute.markers.length} 个收藏点 · 约 {myRoute.minutes} 分钟 · 换乘 {myRoute.transfers} 次
+            </span>
+            <button className="route-mini-btn" onClick={() => setMyRoute(null)}>
+              退出路线
+            </button>
+          </div>
+          <div className="theme-mini-stops">
+            {myRoute.markers.map((mk, i) => {
+              const st = myRoute.stations.find((x) => x.stationId === mk.stationId)
+              return (
+                <span key={mk.stationId + i} className="theme-mini-stop">
+                  <i style={{ background: 'var(--accent)' }}>{mk.text}</i>
+                  {st ? st.name : ''}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {!route && !myRoute && themeRoute && themeMeta && (
         <div className="route-card theme-card-mini" style={{ borderColor: themeMeta.color }}>
           <div className="route-card-head">
             <b style={{ color: themeMeta.color }}>{themeMeta.name}</b>
