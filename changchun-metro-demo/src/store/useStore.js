@@ -34,6 +34,7 @@ function syncQuery(state) {
   if (state.stationId) q.set('station', state.stationId)
   if (state.poiId) q.set('poi', state.poiId)
   if (state.themeId) q.set('theme', state.themeId)
+  if (state.theme) q.set('mode', state.theme)
   // 原样保留 ?nowebgl=1（强制 WebGL 降级态的演示/自测开关，见 three/webgl.js），
   // 否则切一次层就会把它从 URL 里抹掉。
   const nowebgl = new URLSearchParams(window.location.search).get('nowebgl')
@@ -122,7 +123,9 @@ export const useStore = create((set, get) => ({
   },
 
   closeDrawer() {
-    set({ drawerPoiId: null })
+    // poiId 与详情抽屉共用同一个分享参数；关闭详情时一并清除，
+    // 避免刷新后因 ?poi=... 再次自动打开刚关闭的抽屉。
+    set({ drawerPoiId: null, poiId: null })
     syncQuery(get())
   },
 
@@ -167,6 +170,7 @@ export const useStore = create((set, get) => ({
 
   setTheme(themeId) {
     set({ themeId })
+    syncQuery(get())
   },
 
   toggleMapVisibility(key) {

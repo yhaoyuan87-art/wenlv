@@ -120,7 +120,7 @@ export default function PoiDrawer() {
 
           <div className="drawer-gallery">
             {media.gallery.map((path, i) => (
-              <PlaceholderMedia key={path} seed={poi.poiId + '-g' + (i + 1)} title={`实景图 ${i + 1}`} ratio="4/3" media={{ status: 'placeholder', cover: path }} />
+              <PlaceholderMedia key={path} seed={poi.poiId + '-g' + (i + 1)} title={`实景图 ${i + 1}`} ratio="4/3" media={{ status: media.status, cover: path }} />
             ))}
           </div>
 
