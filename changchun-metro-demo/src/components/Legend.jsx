@@ -25,7 +25,7 @@ export default function Legend() {
             <div key={l.lineId} className="legend-row">
               <i style={{ background: l.color }} />
               <b>{l.name}</b>
-              <span>{l.direction}</span>
+              <span>{l.direction}{l.mileageKm ? ` · ${l.mileageKm} km` : ''}</span>
             </div>
           ))}
         </div>

@@ -47,6 +47,17 @@ const initial = parseQuery()
 const initialTheme = resolveTheme()
 applyTheme(initialTheme)
 
+// 收藏持久化（localStorage，个人数据不进 URL）
+const FAV_KEY = 'wenlv-favs'
+function loadFavs() {
+  try {
+    const v = JSON.parse(localStorage.getItem(FAV_KEY))
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
 export const useStore = create((set, get) => ({
   layer: initial.layer,
   districtId: initial.districtId,
@@ -61,7 +72,26 @@ export const useStore = create((set, get) => ({
   poiScope: 'station',
   categoryFilter: null,
   themeId: initial.themeId,
-  mapVisibility: { districts: true, lines: true, stations: true, pois: true, labels: true },
+  // 2D 总览默认用「区划聚合气泡」代替景点散点（中观关系视图）；可手动开回散点
+  mapVisibility: { districts: true, lines: true, stations: true, pois: false, labels: true },
+  // 收藏的景点（localStorage 持久化）+ 由收藏串成的「我的路线」（findRoute 链）
+  favorites: loadFavs(),
+  myRoute: null,
+
+  toggleFavorite(poiId) {
+    const cur = get().favorites
+    const next = cur.includes(poiId) ? cur.filter((x) => x !== poiId) : [...cur, poiId]
+    try {
+      localStorage.setItem(FAV_KEY, JSON.stringify(next))
+    } catch {
+      /* 隐私模式等场景存不进就只在本次会话生效 */
+    }
+    set({ favorites: next })
+  },
+
+  setMyRoute(route) {
+    set({ myRoute: route })
+  },
   // 详情面板对 3D 视野的遮挡量（px）。3D 相机据此把视觉中心移到「未被挡住的区域」中心
   panelInsets: { right: 0, bottom: 0 },
   // 3D 层处于 WebGL 降级态：详情面板据此让位，避免遮挡兜底卡片

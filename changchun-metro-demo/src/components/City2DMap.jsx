@@ -11,15 +11,32 @@ function riverPath() {
   return yitongRiver.map(([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`)).join(' ')
 }
 
+// 业务坐标最初以 1000 × 760 画布录入，现已按 2026 官方线网图（1440 × 1340）逐站校准；
+// 这里统一投影到校准时的参考坐标系，tooltip 的百分比定位也基于同一套视窗。
+const MAP_OFFSET_X = 40
+const MAP_OFFSET_Y = 230
+const MAP_SCALE_X = 1
+const MAP_SCALE_Y = 1.12
+// 视窗收紧到线网实际范围（含东侧机场标记），地图在卡片里更大更饱满
+const VIEW = { x: 100, y: 80, w: 1240, h: 1100 }
+const toReferencePoint = (x, y) => ({
+  x: MAP_OFFSET_X + x * MAP_SCALE_X,
+  y: MAP_OFFSET_Y + y * MAP_SCALE_Y
+})
+
 export default function City2DMap({
   show = { districts: true, lines: true, stations: true, pois: true, labels: true },
   filterPoiIds = null,
   highlight = {},
   routePoiIds = null,
+  districtPoiCounts = null,
   onSelect,
   showPoiNames = 'all',
   poiSize = 7
 }) {
+  // 不再使用官方网络图作为底图（俊博要求移除）；恢复矢量线路渲染，
+  // 站点坐标已按官方图逐站校准，矢量走线与真实分布一致。
+  const referenceMap = false
   const [hover, setHover] = useState(null)
   const coarse = useMediaQuery(COARSE_QUERY)
 
@@ -73,7 +90,7 @@ export default function City2DMap({
 
   return (
     <div className="map2d-wrap">
-      <svg viewBox="0 0 1000 760" className="map2d-svg" role="img" aria-label="长春城市平面图">
+      <svg viewBox={`${VIEW.x} ${VIEW.y} ${VIEW.w} ${VIEW.h}`} className="map2d-svg" role="img" aria-label="长春城市轨道交通示意图">
         <defs>
           <radialGradient id="map-bg" cx="50%" cy="42%" r="75%">
             <stop offset="0%" stopColor="#101a30" />
@@ -83,12 +100,14 @@ export default function City2DMap({
             <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(90,130,200,0.08)" strokeWidth="1" />
           </pattern>
         </defs>
-        <rect x="0" y="0" width="1000" height="760" fill="url(#map-bg)" />
-        <rect x="0" y="0" width="1000" height="760" fill="url(#map-grid)" />
+        <rect x={VIEW.x} y={VIEW.y} width={VIEW.w} height={VIEW.h} fill="url(#map-bg)" />
+        <rect x={VIEW.x} y={VIEW.y} width={VIEW.w} height={VIEW.h} fill="url(#map-grid)" />
 
-        <path d={riverPath()} fill="none" stroke="#2e6f8f" strokeWidth="9" strokeOpacity="0.55" strokeLinecap="round" strokeLinejoin="round" />
-        <path d={riverPath()} fill="none" stroke="#57c4e5" strokeWidth="3" strokeOpacity="0.5" strokeLinecap="round" strokeLinejoin="round" />
-        <text x="592" y="380" className="map-river-label" transform="rotate(78 592 380)">伊通河</text>
+        <g transform={`translate(${MAP_OFFSET_X} ${MAP_OFFSET_Y}) scale(${MAP_SCALE_X} ${MAP_SCALE_Y})`}>
+
+        <path d={riverPath()} fill="none" stroke="#2e6f8f" strokeWidth="12" strokeOpacity="0.55" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={riverPath()} fill="none" stroke="#57c4e5" strokeWidth="4.5" strokeOpacity="0.5" strokeLinecap="round" strokeLinejoin="round" />
+        <text x="662" y="430" className="map-river-label" transform="rotate(80 662 430)">伊通河</text>
 
         {show.districts &&
           districts.map((d) => {
@@ -100,8 +119,9 @@ export default function City2DMap({
                 key={d.districtId}
                 points={pts}
                 fill={d.color}
-                fillOpacity={isHL ? 0.32 : dim ? 0.06 : 0.14}
+                fillOpacity={referenceMap ? (isHL ? 0.18 : 0) : isHL ? 0.32 : dim ? 0.06 : 0.14}
                 stroke={isHL ? '#38e1ff' : 'rgba(140,180,255,0.35)'}
+                strokeOpacity={referenceMap ? (isHL ? 0.9 : 0) : 1}
                 strokeWidth={isHL ? 2.5 : 1.2}
                 className="map-clickable"
                 onClick={() => onSelect && onSelect('district', d.districtId)}
@@ -116,7 +136,7 @@ export default function City2DMap({
             stroke="#38e1ff"
             strokeWidth="2.5"
             strokeDasharray="8 6"
-            strokeOpacity="0.9"
+            strokeOpacity={referenceMap ? 0 : 0.9}
             strokeLinejoin="round"
           />
         )}
@@ -127,13 +147,13 @@ export default function City2DMap({
             const isHL = highlight.lineId === line.lineId
             const dim = highlight.lineId && !isHL
             return (
-              <polyline
+          <polyline
                 key={line.lineId}
                 points={pts}
                 fill="none"
                 stroke={line.color}
                 strokeWidth={isHL ? 7 : dim ? 2.5 : 4.5}
-                strokeOpacity={isHL ? 1 : dim ? 0.25 : 0.8}
+                strokeOpacity={isHL ? 0.95 : referenceMap ? 0 : dim ? 0.25 : 0.8}
                 strokeLinejoin="round"
                 strokeLinecap="round"
                 className="map-clickable"
@@ -144,7 +164,7 @@ export default function City2DMap({
 
         {routeLine &&
           routeLine.map((p, i) => (
-            <g key={'rt-' + p.poiId} className="map-clickable" onClick={() => onSelect && onSelect('poi', p.poiId)}>
+            <g key={'rt-' + p.poiId} className="map-clickable" opacity={referenceMap ? 0 : 1} onClick={() => onSelect && onSelect('poi', p.poiId)}>
               <circle cx={p.x} cy={p.y} r="10" fill="#0a0f1c" stroke="#38e1ff" strokeWidth="2" />
               <text x={p.x} y={p.y + 4} textAnchor="middle" className="map-route-index">
                 {i + 1}
@@ -166,8 +186,9 @@ export default function City2DMap({
                   r={isHL ? 8 : isTransfer ? 6 : 4.5}
                   fill={isTransfer ? '#ffffff' : line.color}
                   stroke={isHL ? '#38e1ff' : '#0a0f1c'}
+                  strokeOpacity={referenceMap ? (isHL ? 1 : 0) : 1}
                   strokeWidth={isHL ? 3 : isTransfer ? 2 : 1.5}
-                  fillOpacity={dim ? 0.25 : 1}
+                  fillOpacity={referenceMap ? (isHL ? 1 : 0) : dim ? 0.25 : 1}
                   className="map-clickable"
                   onClick={() => onSelect && onSelect('station', s.stationId)}
                   onMouseEnter={() => setHover({ type: 'station', data: s, line })}
@@ -193,6 +214,41 @@ export default function City2DMap({
             ) : null
           )}
 
+        {/* 区划景点聚合气泡：中观视图用数字代替逐点散布，点击等同点区划 */}
+        {show.districts &&
+          districtPoiCounts &&
+          districtPoiCounts.map(({ id, count }) => {
+            const d = districts.find((x) => x.districtId === id)
+            if (!d || !count) return null
+            const cx = d.label[0]
+            const cy = d.label[1] + 26
+            const isHL = highlight.districtId === id
+            return (
+              <g
+                key={'agg-' + id}
+                className="map-agg map-clickable"
+                onClick={() => onSelect && onSelect('district', id)}
+              >
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={isHL ? 15 : 13}
+                  fill="#0a0f1c"
+                  fillOpacity="0.85"
+                  stroke={d.color}
+                  strokeWidth={isHL ? 2.5 : 1.5}
+                  strokeOpacity="0.95"
+                />
+                <text x={cx} y={cy + 4} textAnchor="middle" className="map-agg-num">
+                  {count}
+                </text>
+                <title>
+                  {d.name} · {count} 个景点
+                </title>
+              </g>
+            )
+          })}
+
         {show.stations &&
           show.labels &&
           metroLines.map((line) =>
@@ -200,6 +256,7 @@ export default function City2DMap({
               const isTransfer = (s.transfer || []).length > 0
               const isSel = highlight.stationId === s.stationId
               if ((!isTransfer && !isSel) || !labelVisible.has('sl-' + s.stationId)) return null
+              if (referenceMap) return null
               return (
                 <text
                   key={'sl-' + s.stationId}
@@ -223,6 +280,7 @@ export default function City2DMap({
               <g
                 key={p.poiId}
                 className="map-clickable"
+                opacity={referenceMap ? 0 : 1}
                 onClick={() => onSelect && onSelect('poi', p.poiId)}
                 onMouseEnter={() => setHover({ type: 'poi', data: p })}
                 onMouseLeave={() => setHover(null)}
@@ -251,7 +309,7 @@ export default function City2DMap({
             叠一层透明的更大判定圈（fill=transparent 可被命中，fill=none 不行），
             仅在触屏或窄屏渲染；景点画在站点之后，因此优先级更高。 */}
         {coarse && (
-          <g className="map-hit-layer">
+            <g className="map-hit-layer">
             {show.stations &&
               metroLines.map((line) =>
                 line.stations.map((s) => (
@@ -280,15 +338,19 @@ export default function City2DMap({
         )}
 
         <g className="map-airport">
-          <circle cx="940" cy="150" r="5" fill="none" stroke="#ffb457" strokeWidth="2" />
-          <text x="940" y="134" textAnchor="middle" className="map-airport-label">龙嘉机场</text>
+          <circle cx="1260" cy="300" r="5" fill="none" stroke="#ffb457" strokeWidth="2" />
+          <text x="1260" y="284" textAnchor="middle" className="map-airport-label">龙嘉机场</text>
+        </g>
         </g>
       </svg>
 
       {hover && (
         <div
           className="map-tooltip"
-          style={{ left: `${(hover.data.x / 1000) * 100}%`, top: `${(hover.data.y / 760) * 100}%` }}
+          style={{
+            left: `${((toReferencePoint(hover.data.x, hover.data.y).x - VIEW.x) / VIEW.w) * 100}%`,
+            top: `${((toReferencePoint(hover.data.x, hover.data.y).y - VIEW.y) / VIEW.h) * 100}%`
+          }}
         >
           {hover.type === 'poi' ? (
             <>
