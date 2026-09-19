@@ -14,8 +14,6 @@ export default function PoiDrawer() {
   const selectDistrict = useStore((s) => s.selectDistrict)
   const selectStation = useStore((s) => s.selectStation)
   const selectLine = useStore((s) => s.selectLine)
-  const isFav = useStore((s) => s.drawerPoiId && s.favorites.includes(s.drawerPoiId))
-  const toggleFavorite = useStore((s) => s.toggleFavorite)
 
   if (!drawerPoiId) return null
   const poi = getPoi(drawerPoiId)
@@ -35,14 +33,6 @@ export default function PoiDrawer() {
       <aside className="drawer" role="dialog" aria-label={poi.name}>
         <button className="drawer-close" onClick={closeDrawer} aria-label="关闭详情">
           ×
-        </button>
-        <button
-          className={'fav-btn' + (isFav ? ' on' : '')}
-          onClick={() => toggleFavorite(poi.poiId)}
-          title={isFav ? '取消收藏' : '收藏景点'}
-        >
-          <i />
-          {isFav ? '已收藏' : '收藏'}
         </button>
         <PlaceholderMedia seed={poi.poiId} title={poi.name} sub={`${cat.name} · 建议游览 ${poi.duration}`} media={media} />
         <div className="drawer-body">
