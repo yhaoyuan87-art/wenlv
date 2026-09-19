@@ -52,7 +52,7 @@ def run():
         check('A3 站点周边景点层', 'layer=poi' in page.url and '站周边' in count, count)
 
         # 4. 打开景点详情抽屉
-        page.locator('.poi-tile').first.click()
+        page.locator('.poi-strip .poi-card').first.click()
         page.wait_for_timeout(1200)
         drawer = page.locator('.drawer')
         check('A4 景点详情抽屉打开', drawer.count() > 0 and drawer.is_visible())
@@ -70,7 +70,7 @@ def run():
         # ---- 任务 C：从景点开始了解城市 ----
         page.keyboard.press('3')
         page.wait_for_timeout(1500)
-        page.locator('.poi-tile').first.click()
+        page.locator('.poi-strip .poi-card').first.click()
         page.wait_for_timeout(1200)
         page.locator('.drawer .btn.link', has_text='最近地铁站').first.click()
         page.wait_for_timeout(1500)
@@ -100,10 +100,14 @@ def run():
         page.wait_for_timeout(600)
         check('D3 路径规划出方案', page.locator('.route-card:not(.theme-card-mini)').count() == 1)
 
-        # D4 主题一日线时间轴
+        # D4 主题一日线：主题卡 + 地铁层序号气泡（POI 层为 master 形态，无时间轴）
         page.goto(BASE + '/?layer=poi&theme=theme-d1', wait_until='networkidle')
         page.wait_for_timeout(1200)
-        check('D4 主题行程时间轴', page.locator('.tl-card').count() >= 4 and page.locator('.tl-hop-tag').count() >= 3)
+        count_text = page.locator('.poi-count').inner_text() if page.locator('.poi-count').count() else ''
+        check('D4a 主题激活与计数', page.locator('.theme-card').count() == 1 and '主题' in count_text, count_text)
+        page.keyboard.press('2')
+        page.wait_for_timeout(1500)
+        check('D4b 主题3D序号气泡', page.locator('.route-num').count() >= 3)
 
         # D5 2D 总览聚合气泡 + 摘要卡
         page.keyboard.press('4')
