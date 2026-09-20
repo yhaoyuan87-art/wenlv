@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import CameraControls from 'camera-controls'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { districts, landmarks, yitongRiver } from '../data/districts.js'
 import { pixelRatio, fitCamera, portraitPull, observeSize, isMobile } from './adapt.js'
 import { cssVar, hexToNumber } from '../theme/theme.js'
@@ -47,6 +48,10 @@ export class CityScene {
     this.districtMeshes = []
     this.districtGroups = {}
     this.labelPool = []
+
+    this.modelRoot = null
+    this.modelReady = false
+    this.modelScale = 1
 
     this._onPointerDown = this.onPointerDown.bind(this)
     this._onPointerMove = this.onPointerMove.bind(this)
@@ -104,10 +109,7 @@ export class CityScene {
     this.scene.add(dir)
 
     this.buildGround()
-    this.buildRiver()
-    this.buildDistricts()
-    this.buildBuildings()
-    this.buildLandmarks()
+    this.loadModel()
 
     this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown)
     this.renderer.domElement.addEventListener('pointermove', this._onPointerMove)
@@ -143,11 +145,101 @@ export class CityScene {
     mesh.position.y = -1
     this.scene.add(mesh)
     this.groundMat = m
+  }
 
-    const grid = new THREE.GridHelper(2200, 44, 0x22314f, 0x182238)
-    this.gridHelper = grid
-    grid.position.y = 0.5
-    this.scene.add(grid)
+  loadModel() {
+    const loader = new GLTFLoader()
+    loader.load(
+      '/models/changchun-city.glb',
+      (gltf) => {
+        if (this.disposed) return
+        const model = gltf.scene
+        this.modelRoot = model
+        this.fitModel(model)
+        this.scene.add(model)
+        this.wireModelInteractions(model)
+        this.modelReady = true
+        if (this.callbacks.onModelReady) this.callbacks.onModelReady()
+        if (!this.userMoved) this.resetView()
+      },
+      undefined,
+      (err) => {
+        console.error('[CityScene] model load failed', err)
+      }
+    )
+  }
+
+  fitModel(model) {
+    const box = new THREE.Box3().setFromObject(model)
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const targetWidth = 1280
+    const s = targetWidth / Math.max(size.x, size.z)
+    this.modelScale = s
+    model.scale.setScalar(s)
+    model.position.set(-center.x * s, -box.min.y * s, -center.z * s)
+  }
+
+  wireModelInteractions(model) {
+    const nameToId = {}
+    for (const d of districts) {
+      nameToId[d.name] = d.districtId
+      if (d.name.endsWith('区')) nameToId[d.name.slice(0, -1)] = d.districtId
+    }
+
+    const stationMeshes = []
+    const ray = new THREE.Raycaster()
+
+    model.traverse((obj) => {
+      if (!obj.isMesh) return
+      const n = obj.name || ''
+
+      const plateMatch = n.match(/^(.+?)_参考图轮廓面(?:Mesh)?$/)
+      if (plateMatch) {
+        const dName = plateMatch[1]
+        const districtId = nameToId[dName]
+        if (districtId) {
+          const mat = obj.material
+          if (mat && !Array.isArray(mat)) {
+            mat.transparent = true
+            mat.side = THREE.DoubleSide
+          }
+          obj.userData = { type: 'district', id: districtId }
+          this.districtMeshes.push(obj)
+          this.districtGroups[districtId] = { group: null, mat: obj.material, edge: null }
+        }
+      }
+
+      const edgeMatch = n.match(/^(.+?)_分区边界(?:Curve|Mesh)?$/)
+      if (edgeMatch) {
+        const dName = edgeMatch[1]
+        const districtId = nameToId[dName]
+        if (districtId) {
+          const entry = this.districtGroups[districtId]
+          if (entry) {
+            entry.edge = obj
+            const mat = obj.material
+            if (mat && !Array.isArray(mat)) mat.transparent = true
+          }
+        }
+      }
+
+      const stationMatch = n.match(/^(.+?)_站点(?:外圈)?(?:Mesh)?$/)
+      if (stationMatch && !n.includes('投影')) {
+        const sName = stationMatch[1]
+        obj.userData = { type: 'landmark', name: sName }
+        stationMeshes.push(obj)
+      }
+    })
+
+    for (const sm of stationMeshes) {
+      const wp = new THREE.Vector3()
+      sm.getWorldPosition(wp)
+      ray.set(new THREE.Vector3(wp.x, 1000, wp.z), new THREE.Vector3(0, -1, 0))
+      const hits = ray.intersectObjects(this.districtMeshes, false)
+      if (hits.length) sm.userData.districtId = hits[0].object.userData.id
+      this.landmarkHitMeshes.push(sm)
+    }
   }
 
   buildRiver() {
@@ -430,7 +522,7 @@ export class CityScene {
         entry.mat.emissiveIntensity = 1
       }
       entry.edge.material.opacity = selected ? 0.9 : 0.35
-      entry.group.position.y = 0
+      if (entry.group) entry.group.position.y = 0
     }
     if (id) this.focusDistrict(id)
   }

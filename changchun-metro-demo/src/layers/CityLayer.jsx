@@ -20,6 +20,8 @@ export default function CityLayer() {
   const [preview, setPreview] = useState(null)
   // WebGL 不可用（或 ?nowebgl=1 强制）时不构造 3D 场景，直接渲染兜底 UI
   const [unsupported, setUnsupported] = useState(() => shouldFallback3D())
+  // GLB 城市模型异步加载指示
+  const [modelReady, setModelReady] = useState(false)
 
   useEffect(() => {
     if (unsupported) return undefined
@@ -34,7 +36,8 @@ export default function CityLayer() {
         onSelectLandmark: (lm) => {
           if (lm.districtId) useStore.getState().selectDistrict(lm.districtId)
           setPreview({ name: lm.name, districtId: lm.districtId || null })
-        }
+        },
+        onModelReady: () => setModelReady(true)
       })
       scene.setReduceMotion(store.reduceMotion)
       scene.setTheme()
@@ -116,6 +119,11 @@ export default function CityLayer() {
 
   return (
     <div className="three-host" ref={hostRef}>
+      {!modelReady && (
+        <div className="city-model-loading">
+          <span>城市模型加载中…</span>
+        </div>
+      )}
       <div className="view-controls">
         {VIEWS.map((v) => (
           <button
