@@ -52,6 +52,8 @@ export class CityScene {
     this.modelRoot = null
     this.modelReady = false
     this.modelScale = 1
+    this.districtLabelObjs = []
+    this.stationLabelObjs = []
 
     this._onPointerDown = this.onPointerDown.bind(this)
     this._onPointerMove = this.onPointerMove.bind(this)
@@ -189,6 +191,25 @@ export class CityScene {
 
     const stationMeshes = []
     const ray = new THREE.Raycaster()
+    const tmpWP = new THREE.Vector3()
+    const tmpBox = new THREE.Box3()
+
+    // 先把模型里所有文字相关的 Mesh 隐藏，字体未导出导致方块。
+    // 之后再用 CSS2D 标签覆盖显示真实中文。
+    model.traverse((obj) => {
+      if (!obj.isMesh) return
+      const n = obj.name || ''
+      if (
+        n.endsWith('_行政区标签') ||
+        n.endsWith('_行政区标签_投影') ||
+        n.endsWith('_站名') ||
+        n.endsWith('_站名_投影')
+      ) {
+        obj.visible = false
+      }
+    })
+
+    model.updateMatrixWorld(true)
 
     model.traverse((obj) => {
       if (!obj.isMesh) return
@@ -229,6 +250,42 @@ export class CityScene {
         const sName = stationMatch[1]
         obj.userData = { type: 'landmark', name: sName }
         stationMeshes.push(obj)
+      }
+
+      // 区名标签：用 CSS2D 覆盖，避免 Blender 字体烘焙失败导致的方块
+      const distLabelMatch = n.match(/^(.+?)_行政区标签$/)
+      if (distLabelMatch) {
+        const dName = distLabelMatch[1]
+        const districtId = nameToId[dName]
+        obj.getWorldPosition(tmpWP)
+        tmpBox.setFromObject(obj)
+        const center = tmpBox.getCenter(new THREE.Vector3())
+        const div = document.createElement('div')
+        div.className = 'city3d-label city3d-district'
+        div.textContent = dName
+        if (districtId) {
+          div.addEventListener('click', () => this.callbacks.onSelectDistrict(districtId))
+        }
+        const lobj = new CSS2DObject(div)
+        lobj.position.copy(center)
+        lobj.userData = { districtId }
+        this.scene.add(lobj)
+        this.districtLabelObjs.push(lobj)
+      }
+
+      // 站名标签
+      const stLabelMatch = n.match(/^(.+?)_站名$/)
+      if (stLabelMatch) {
+        const sName = stLabelMatch[1]
+        tmpBox.setFromObject(obj)
+        const center = tmpBox.getCenter(new THREE.Vector3())
+        const div = document.createElement('div')
+        div.className = 'city3d-label city3d-station'
+        div.textContent = sName
+        const lobj = new CSS2DObject(div)
+        lobj.position.copy(center)
+        this.scene.add(lobj)
+        this.stationLabelObjs.push(lobj)
       }
     })
 
@@ -661,6 +718,12 @@ export class CityScene {
     })
     this.renderer.domElement.remove()
     this.labelRenderer.domElement.remove()
+    for (const l of [...this.districtLabelObjs, ...this.stationLabelObjs]) {
+      this.scene.remove(l)
+      if (l.element && l.element.parentNode) l.element.parentNode.removeChild(l.element)
+    }
+    this.districtLabelObjs = []
+    this.stationLabelObjs = []
     this.renderer.domElement.removeEventListener('pointerdown', this._onPointerDown)
     this.renderer.domElement.removeEventListener('pointermove', this._onPointerMove)
     this.renderer.domElement.removeEventListener('pointerleave', this._onPointerLeave)
