@@ -3,6 +3,7 @@ import City2DMap from '../components/City2DMap.jsx'
 import ThemePicker from '../components/ThemePicker.jsx'
 import { useStore } from '../store/useStore.js'
 import { poisByStation, poisByLine, poisByDistrict, pois, poiCategories, getCategory } from '../data/pois.js'
+import { getMedia } from '../data/media.js'
 import { getStation, getLine } from '../data/metroLines.js'
 import { getDistrict } from '../data/districts.js'
 import { themePois } from '../data/themes.js'
@@ -131,9 +132,15 @@ export default function PoiLayer() {
         {filtered.length === 0 && <div className="poi-strip-empty">当前筛选没有景点，换个范围或类别试试</div>}
         {filtered.map((p) => {
           const cat = getCategory(p.category)
+          const m = getMedia(p.poiId)
+          const ready = m.status === 'ready'
           return (
             <button key={p.poiId} className={'poi-card' + (poiId === p.poiId ? ' sel' : '')} onClick={() => openDrawer(p.poiId)}>
-              <span className="poi-card-color" style={{ background: cat.color }} />
+              {ready ? (
+                <img className="poi-card-thumb" src={m.cover} alt={p.name} loading="lazy" />
+              ) : (
+                <span className="poi-card-color" style={{ background: cat.color }} />
+              )}
               <span className="poi-card-body">
                 <b>{p.name}</b>
                 <span>{cat.name} · {p.duration} · {getDistrict(p.districtId)?.name}</span>

@@ -2005,6 +2005,16 @@ html.theme-light .city3d-label {
   flex: none;
 }
 
+/* 横条卡片上的素材缩略图（media.status=ready 时替换色点） */
+.poi-card-thumb {
+  width: 46px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 7px;
+  flex: none;
+  background: var(--inset-bg);
+}
+
 .poi-card-body {
   display: flex;
   flex-direction: column;

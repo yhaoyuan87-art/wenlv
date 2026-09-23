@@ -7,6 +7,457 @@
       "cover": "/media/pois/poi-001/cover.svg",
       "video": "/media/pois/poi-001/intro.mp4",
       "panorama": "/media/pois/poi-001/panorama.svg"
+    },
+    "poi-002": {
+      "status": "ready",
+      "cover": "/media/pois/poi-002/cover.png",
+      "video": "/media/pois/poi-002/intro.mp4",
+      "panorama": "/media/pois/poi-002/cover.png",
+      "gallery": [
+        "/media/pois/poi-002/gallery-1.jpeg",
+        "/media/pois/poi-002/gallery-2.jpg",
+        "/media/pois/poi-002/gallery-3.jpg"
+      ]
+    },
+    "poi-003": {
+      "status": "ready",
+      "cover": "/media/pois/poi-003/cover.jpg",
+      "video": "/media/pois/poi-003/intro.mp4",
+      "panorama": "/media/pois/poi-003/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-003/gallery-1.jpg",
+        "/media/pois/poi-003/gallery-2.jpg",
+        "/media/pois/poi-003/gallery-3.jpg"
+      ]
+    },
+    "poi-004": {
+      "status": "ready",
+      "cover": "/media/pois/poi-004/cover.png",
+      "video": "/media/pois/poi-004/intro.mp4",
+      "panorama": "/media/pois/poi-004/cover.png",
+      "gallery": [
+        "/media/pois/poi-004/gallery-1.jpg",
+        "/media/pois/poi-004/gallery-2.jpg",
+        "/media/pois/poi-004/gallery-3.jpg"
+      ]
+    },
+    "poi-005": {
+      "status": "ready",
+      "cover": "/media/pois/poi-005/cover.jpg",
+      "video": "/media/pois/poi-005/intro.mp4",
+      "panorama": "/media/pois/poi-005/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-005/gallery-1.jpg",
+        "/media/pois/poi-005/gallery-2.jpg",
+        "/media/pois/poi-005/gallery-3.jpg"
+      ]
+    },
+    "poi-008": {
+      "status": "ready",
+      "cover": "/media/pois/poi-008/cover.jpg",
+      "video": "/media/pois/poi-008/intro.mp4",
+      "panorama": "/media/pois/poi-008/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-008/gallery-1.jpg",
+        "/media/pois/poi-008/gallery-2.jpg",
+        "/media/pois/poi-008/gallery-3.jpg"
+      ]
+    },
+    "poi-009": {
+      "status": "ready",
+      "cover": "/media/pois/poi-009/cover.jpg",
+      "video": "/media/pois/poi-009/intro.mp4",
+      "panorama": "/media/pois/poi-009/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-009/gallery-1.jpg",
+        "/media/pois/poi-009/gallery-2.jpg",
+        "/media/pois/poi-009/gallery-3.jpg"
+      ]
+    },
+    "poi-010": {
+      "status": "ready",
+      "cover": "/media/pois/poi-010/cover.jpg",
+      "video": "/media/pois/poi-010/intro.mp4",
+      "panorama": "/media/pois/poi-010/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-010/gallery-1.jpg",
+        "/media/pois/poi-010/gallery-2.jpg",
+        "/media/pois/poi-010/gallery-3.jpg"
+      ]
+    },
+    "poi-011": {
+      "status": "ready",
+      "cover": "/media/pois/poi-011/cover.jpg",
+      "video": "/media/pois/poi-011/intro.mp4",
+      "panorama": "/media/pois/poi-011/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-011/gallery-1.jpg",
+        "/media/pois/poi-011/gallery-2.jpg",
+        "/media/pois/poi-011/gallery-3.jpg"
+      ]
+    },
+    "poi-013": {
+      "status": "ready",
+      "cover": "/media/pois/poi-013/cover.jpeg",
+      "video": "/media/pois/poi-013/intro.mp4",
+      "panorama": "/media/pois/poi-013/cover.jpeg",
+      "gallery": [
+        "/media/pois/poi-013/gallery-1.png",
+        "/media/pois/poi-013/gallery-2.jpeg",
+        "/media/pois/poi-013/gallery-3.jpg"
+      ]
+    },
+    "poi-015": {
+      "status": "ready",
+      "cover": "/media/pois/poi-015/cover.jpeg",
+      "video": "/media/pois/poi-015/intro.mp4",
+      "panorama": "/media/pois/poi-015/cover.jpeg",
+      "gallery": [
+        "/media/pois/poi-015/gallery-1.jpg",
+        "/media/pois/poi-015/gallery-2.jpg",
+        "/media/pois/poi-015/gallery-3.jpg"
+      ]
+    },
+    "poi-016": {
+      "status": "ready",
+      "cover": "/media/pois/poi-016/cover.png",
+      "video": "/media/pois/poi-016/intro.mp4",
+      "panorama": "/media/pois/poi-016/cover.png",
+      "gallery": [
+        "/media/pois/poi-016/gallery-1.jpg",
+        "/media/pois/poi-016/gallery-2.jpg",
+        "/media/pois/poi-016/gallery-3.jpg"
+      ]
+    },
+    "poi-017": {
+      "status": "ready",
+      "cover": "/media/pois/poi-017/cover.png",
+      "video": "/media/pois/poi-017/intro.mp4",
+      "panorama": "/media/pois/poi-017/cover.png",
+      "gallery": [
+        "/media/pois/poi-017/gallery-1.jpg",
+        "/media/pois/poi-017/gallery-2.png",
+        "/media/pois/poi-017/gallery-3.jpg"
+      ]
+    },
+    "poi-018": {
+      "status": "ready",
+      "cover": "/media/pois/poi-018/cover.jpg",
+      "video": "/media/pois/poi-018/intro.mp4",
+      "panorama": "/media/pois/poi-018/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-018/gallery-1.jpg",
+        "/media/pois/poi-018/gallery-2.jpg",
+        "/media/pois/poi-018/gallery-3.jpg"
+      ]
+    },
+    "poi-019": {
+      "status": "ready",
+      "cover": "/media/pois/poi-019/cover.jpg",
+      "video": "/media/pois/poi-019/intro.mp4",
+      "panorama": "/media/pois/poi-019/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-019/gallery-1.jpeg",
+        "/media/pois/poi-019/gallery-2.jpg",
+        "/media/pois/poi-019/gallery-3.jpg"
+      ]
+    },
+    "poi-024": {
+      "status": "ready",
+      "cover": "/media/pois/poi-024/cover.png",
+      "video": "/media/pois/poi-024/intro.mp4",
+      "panorama": "/media/pois/poi-024/cover.png",
+      "gallery": [
+        "/media/pois/poi-024/gallery-1.png",
+        "/media/pois/poi-024/gallery-2.png",
+        "/media/pois/poi-024/gallery-3.png"
+      ]
+    },
+    "poi-025": {
+      "status": "ready",
+      "cover": "/media/pois/poi-025/cover.png",
+      "video": "/media/pois/poi-025/intro.mp4",
+      "panorama": "/media/pois/poi-025/cover.png",
+      "gallery": [
+        "/media/pois/poi-025/gallery-1.png",
+        "/media/pois/poi-025/gallery-2.png",
+        "/media/pois/poi-025/gallery-3.png"
+      ]
+    },
+    "poi-026": {
+      "status": "ready",
+      "cover": "/media/pois/poi-026/cover.jpg",
+      "video": "/media/pois/poi-026/intro.mp4",
+      "panorama": "/media/pois/poi-026/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-026/gallery-1.jpg",
+        "/media/pois/poi-026/gallery-2.jpg",
+        "/media/pois/poi-026/gallery-3.png"
+      ]
+    },
+    "poi-027": {
+      "status": "ready",
+      "cover": "/media/pois/poi-027/cover.jpg",
+      "video": "/media/pois/poi-027/intro.mp4",
+      "panorama": "/media/pois/poi-027/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-027/gallery-1.jpg",
+        "/media/pois/poi-027/gallery-2.jpg",
+        "/media/pois/poi-027/gallery-3.jpg"
+      ]
+    },
+    "poi-028": {
+      "status": "ready",
+      "cover": "/media/pois/poi-028/cover.jpg",
+      "video": "/media/pois/poi-028/intro.mp4",
+      "panorama": "/media/pois/poi-028/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-028/gallery-1.jpg",
+        "/media/pois/poi-028/gallery-2.jpg",
+        "/media/pois/poi-028/gallery-3.jpg"
+      ]
+    },
+    "poi-029": {
+      "status": "ready",
+      "cover": "/media/pois/poi-029/cover.jpg",
+      "video": "/media/pois/poi-029/intro.mp4",
+      "panorama": "/media/pois/poi-029/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-029/gallery-1.jpg",
+        "/media/pois/poi-029/gallery-2.jpg",
+        "/media/pois/poi-029/gallery-3.jpg"
+      ]
+    },
+    "poi-030": {
+      "status": "ready",
+      "cover": "/media/pois/poi-030/cover.jpg",
+      "video": "/media/pois/poi-030/intro.mp4",
+      "panorama": "/media/pois/poi-030/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-030/gallery-1.jpg",
+        "/media/pois/poi-030/gallery-2.jpg",
+        "/media/pois/poi-030/gallery-3.jpg"
+      ]
+    },
+    "poi-031": {
+      "status": "ready",
+      "cover": "/media/pois/poi-031/cover.jpg",
+      "video": "/media/pois/poi-031/intro.mp4",
+      "panorama": "/media/pois/poi-031/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-031/gallery-1.png",
+        "/media/pois/poi-031/gallery-2.png",
+        "/media/pois/poi-031/gallery-3.png"
+      ]
+    },
+    "poi-032": {
+      "status": "ready",
+      "cover": "/media/pois/poi-032/cover.jpg",
+      "video": "/media/pois/poi-032/intro.mp4",
+      "panorama": "/media/pois/poi-032/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-032/gallery-1.jpg",
+        "/media/pois/poi-032/gallery-2.jpg",
+        "/media/pois/poi-032/gallery-3.jpg"
+      ]
+    },
+    "poi-033": {
+      "status": "ready",
+      "cover": "/media/pois/poi-033/cover.jpg",
+      "video": "/media/pois/poi-033/intro.mp4",
+      "panorama": "/media/pois/poi-033/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-033/gallery-1.jpg",
+        "/media/pois/poi-033/gallery-2.jpg",
+        "/media/pois/poi-033/gallery-3.png"
+      ]
+    },
+    "poi-034": {
+      "status": "ready",
+      "cover": "/media/pois/poi-034/cover.jpg",
+      "video": "/media/pois/poi-034/intro.mp4",
+      "panorama": "/media/pois/poi-034/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-034/gallery-1.png",
+        "/media/pois/poi-034/gallery-2.png",
+        "/media/pois/poi-034/gallery-3.png"
+      ]
+    },
+    "poi-035": {
+      "status": "ready",
+      "cover": "/media/pois/poi-035/cover.jpg",
+      "video": "/media/pois/poi-035/intro.mp4",
+      "panorama": "/media/pois/poi-035/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-035/gallery-1.png",
+        "/media/pois/poi-035/gallery-2.png",
+        "/media/pois/poi-035/gallery-3.png"
+      ]
+    },
+    "poi-036": {
+      "status": "ready",
+      "cover": "/media/pois/poi-036/cover.jpg",
+      "video": "/media/pois/poi-036/intro.mp4",
+      "panorama": "/media/pois/poi-036/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-036/gallery-1.png",
+        "/media/pois/poi-036/gallery-2.jpg",
+        "/media/pois/poi-036/gallery-3.jpg"
+      ]
+    },
+    "poi-037": {
+      "status": "ready",
+      "cover": "/media/pois/poi-037/cover.jpg",
+      "video": "/media/pois/poi-037/intro.mp4",
+      "panorama": "/media/pois/poi-037/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-037/gallery-1.jpg",
+        "/media/pois/poi-037/gallery-2.jpg",
+        "/media/pois/poi-037/gallery-3.jpg"
+      ]
+    },
+    "poi-038": {
+      "status": "ready",
+      "cover": "/media/pois/poi-038/cover.jpg",
+      "video": "/media/pois/poi-038/intro.mp4",
+      "panorama": "/media/pois/poi-038/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-038/gallery-1.jpg",
+        "/media/pois/poi-038/gallery-2.png",
+        "/media/pois/poi-038/gallery-3.jpg"
+      ]
+    },
+    "poi-039": {
+      "status": "ready",
+      "cover": "/media/pois/poi-039/cover.jpg",
+      "video": "/media/pois/poi-039/intro.mp4",
+      "panorama": "/media/pois/poi-039/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-039/gallery-1.jpg",
+        "/media/pois/poi-039/gallery-2.jpg",
+        "/media/pois/poi-039/gallery-3.jpg"
+      ]
+    },
+    "poi-040": {
+      "status": "ready",
+      "cover": "/media/pois/poi-040/cover.jpg",
+      "video": "/media/pois/poi-040/intro.mp4",
+      "panorama": "/media/pois/poi-040/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-040/gallery-1.jpg",
+        "/media/pois/poi-040/gallery-2.jpg",
+        "/media/pois/poi-040/gallery-3.jpg"
+      ]
+    },
+    "poi-041": {
+      "status": "ready",
+      "cover": "/media/pois/poi-041/cover.jpg",
+      "video": "/media/pois/poi-041/intro.mp4",
+      "panorama": "/media/pois/poi-041/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-041/gallery-1.jpg",
+        "/media/pois/poi-041/gallery-2.jpg",
+        "/media/pois/poi-041/gallery-3.jpg"
+      ]
+    },
+    "poi-042": {
+      "status": "ready",
+      "cover": "/media/pois/poi-042/cover.png",
+      "video": "/media/pois/poi-042/intro.mp4",
+      "panorama": "/media/pois/poi-042/cover.png",
+      "gallery": [
+        "/media/pois/poi-042/gallery-1.jpg",
+        "/media/pois/poi-042/gallery-2.jpg",
+        "/media/pois/poi-042/gallery-3.jpg"
+      ]
+    },
+    "poi-043": {
+      "status": "ready",
+      "cover": "/media/pois/poi-043/cover.png",
+      "video": "/media/pois/poi-043/intro.mp4",
+      "panorama": "/media/pois/poi-043/cover.png",
+      "gallery": [
+        "/media/pois/poi-043/gallery-1.jpg",
+        "/media/pois/poi-043/gallery-2.jpg",
+        "/media/pois/poi-043/gallery-3.png"
+      ]
+    },
+    "poi-044": {
+      "status": "ready",
+      "cover": "/media/pois/poi-044/cover.jpg",
+      "video": "/media/pois/poi-044/intro.mp4",
+      "panorama": "/media/pois/poi-044/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-044/gallery-1.jpg",
+        "/media/pois/poi-044/gallery-2.jpg",
+        "/media/pois/poi-044/gallery-3.jpg"
+      ]
+    },
+    "poi-045": {
+      "status": "ready",
+      "cover": "/media/pois/poi-045/cover.jpg",
+      "video": "/media/pois/poi-045/intro.mp4",
+      "panorama": "/media/pois/poi-045/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-045/gallery-1.jpg",
+        "/media/pois/poi-045/gallery-2.jpg",
+        "/media/pois/poi-045/gallery-3.jpg"
+      ]
+    },
+    "poi-046": {
+      "status": "ready",
+      "cover": "/media/pois/poi-046/cover.png",
+      "video": "/media/pois/poi-046/intro.mp4",
+      "panorama": "/media/pois/poi-046/cover.png",
+      "gallery": [
+        "/media/pois/poi-046/gallery-1.png",
+        "/media/pois/poi-046/gallery-2.png",
+        "/media/pois/poi-046/gallery-3.png"
+      ]
+    },
+    "poi-047": {
+      "status": "ready",
+      "cover": "/media/pois/poi-047/cover.jpg",
+      "video": "/media/pois/poi-047/intro.mp4",
+      "panorama": "/media/pois/poi-047/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-047/gallery-1.jpg",
+        "/media/pois/poi-047/gallery-2.jpg",
+        "/media/pois/poi-047/gallery-3.jpg"
+      ]
+    },
+    "poi-048": {
+      "status": "ready",
+      "cover": "/media/pois/poi-048/cover.png",
+      "video": "/media/pois/poi-048/intro.mp4",
+      "panorama": "/media/pois/poi-048/cover.png",
+      "gallery": [
+        "/media/pois/poi-048/gallery-1.png",
+        "/media/pois/poi-048/gallery-2.png",
+        "/media/pois/poi-048/gallery-3.png"
+      ]
+    },
+    "poi-049": {
+      "status": "ready",
+      "cover": "/media/pois/poi-049/cover.jpg",
+      "video": "/media/pois/poi-049/intro.mp4",
+      "panorama": "/media/pois/poi-049/cover.jpg",
+      "gallery": [
+        "/media/pois/poi-049/gallery-1.jpg",
+        "/media/pois/poi-049/gallery-2.jpg",
+        "/media/pois/poi-049/gallery-3.jpg"
+      ]
+    },
+    "poi-050": {
+      "status": "ready",
+      "cover": "/media/pois/poi-050/cover.png",
+      "video": "/media/pois/poi-050/intro.mp4",
+      "panorama": "/media/pois/poi-050/cover.png",
+      "gallery": [
+        "/media/pois/poi-050/gallery-1.jpg",
+        "/media/pois/poi-050/gallery-2.png",
+        "/media/pois/poi-050/gallery-3.jpg"
+      ]
     }
   }
 }
