@@ -514,7 +514,7 @@ export class CityScene {
     this.hoverId = null
     for (const d of districts) {
       const entry = this.districtGroups[d.districtId]
-      if (!entry || d.districtId === this.selectedId) continue
+      if (!entry || !entry.mat || d.districtId === this.selectedId) continue
       entry.mat.emissive.copy(new THREE.Color(d.color)).multiplyScalar(0.12)
     }
     this.labelPool.forEach((el, i) => {
@@ -530,7 +530,7 @@ export class CityScene {
       this.renderer.domElement.style.cursor = id || hover ? 'pointer' : 'grab'
       for (const d of districts) {
         const entry = this.districtGroups[d.districtId]
-        if (!entry) continue
+        if (!entry || !entry.mat) continue
         if (d.districtId === this.selectedId) continue
         const isHover = d.districtId === id
         entry.mat.emissive.copy(new THREE.Color(d.color)).multiplyScalar(isHover ? 0.5 : 0.12)
@@ -566,7 +566,7 @@ export class CityScene {
     this.selectedId = id
     for (const d of districts) {
       const entry = this.districtGroups[d.districtId]
-      if (!entry) continue
+      if (!entry || !entry.mat) continue
       const selected = d.districtId === id
       const dim = id && !selected
       entry.mat.opacity = dim ? 0.28 : 0.95
@@ -578,7 +578,7 @@ export class CityScene {
         entry.mat.emissive.copy(baseColor).multiplyScalar(0.12)
         entry.mat.emissiveIntensity = 1
       }
-      entry.edge.material.opacity = selected ? 0.9 : 0.35
+      if (entry.edge) entry.edge.material.opacity = selected ? 0.9 : 0.35
       if (entry.group) entry.group.position.y = 0
     }
     if (id) this.focusDistrict(id)
