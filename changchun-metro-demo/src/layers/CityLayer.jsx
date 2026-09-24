@@ -30,12 +30,12 @@ export default function CityLayer() {
     try {
       scene = new CityScene(hostRef.current, {
         onSelectDistrict: (id) => {
-          if (!id) return
-          useStore.getState().selectDistrict(id)
+          // 点空白时 id 为 null：同样清 store，让面包屑/信息面板与 3D 状态一致
+          useStore.getState().selectDistrict(id || null)
         },
         onSelectLandmark: (lm) => {
           if (lm.districtId) useStore.getState().selectDistrict(lm.districtId)
-          setPreview({ name: lm.name, districtId: lm.districtId || null })
+          setPreview({ name: lm.name, districtId: lm.districtId || null, kind: lm.type || 'station' })
         },
         onModelReady: () => setModelReady(true)
       })
@@ -139,7 +139,10 @@ export default function CityLayer() {
       {preview && (
         <div className="city-preview" key={preview.name}>
           <div className="city-preview-head">
-            <b>{preview.name}</b>
+            <b>
+              {preview.name}
+              {preview.kind === 'station' && <em className="city-preview-kind">站</em>}
+            </b>
             <button className="city-preview-close" onClick={() => setPreview(null)} aria-label="关闭">
               ×
             </button>

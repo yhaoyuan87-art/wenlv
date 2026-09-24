@@ -2,7 +2,12 @@ import * as THREE from 'three'
 import CameraControls from 'camera-controls'
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { districts, landmarks, yitongRiver } from '../data/districts.js'
+import { metroLines } from '../data/metroLines.js'
 import { pixelRatio, fitCamera, portraitPull, observeSize, isMobile } from './adapt.js'
 import { cssVar, hexToNumber } from '../theme/theme.js'
 
@@ -10,17 +15,6 @@ CameraControls.install({ THREE })
 
 export function toXZ(x, y) {
   return { X: x - 500, Z: y - 380 }
-}
-
-function mulberry32(seed) {
-  let a = seed
-  return function () {
-    a |= 0
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
 }
 
 function pointInPolygon(px, py, poly) {
@@ -54,6 +48,9 @@ export class CityScene {
     this.modelScale = 1
     this.districtLabelObjs = []
     this.stationLabelObjs = []
+    this.cityLabelCands = []
+    this.composer = null
+    this.bloomPass = null
 
     this._onPointerDown = this.onPointerDown.bind(this)
     this._onPointerMove = this.onPointerMove.bind(this)
@@ -111,7 +108,9 @@ export class CityScene {
     this.scene.add(dir)
 
     this.buildGround()
+    this.buildSupplements()
     this.loadModel()
+    this._initBloom()
 
     this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown)
     this.renderer.domElement.addEventListener('pointermove', this._onPointerMove)
@@ -149,6 +148,214 @@ export class CityScene {
     this.groundMat = m
   }
 
+  /**
+   * Blender 模型缺项的数据侧补齐：
+   * ① 九台区（模型按旧六区建模，无此区）→ 用 districts.json 多边形补轮廓面/边界/标签；
+   * ② 伊通河带（模型里没有）；
+   * ③ 龙嘉机场地标（模型范围外）。同伴重新导出模型后可按需删除。
+   */
+  buildSupplements() {
+    // ① 九台区
+    const jd = districts.find((x) => x.districtId === 'district-jiutai')
+    if (jd && !this.districtGroups[jd.districtId]) {
+      const shape = new THREE.Shape()
+      jd.polygon.forEach(([x, y], i) => {
+        const { X, Z } = toXZ(x, y)
+        if (i === 0) shape.moveTo(X, Z)
+        else shape.lineTo(X, Z)
+      })
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: 3, bevelEnabled: false })
+      geo.rotateX(Math.PI / 2)
+      const color = new THREE.Color(jd.color)
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color.clone().multiplyScalar(0.12),
+        roughness: 0.65,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.9
+      })
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.userData = { type: 'district', id: jd.districtId }
+      this.districtMeshes.push(mesh)
+      const edge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35 })
+      )
+      edge.position.y = 0.2
+      const group = new THREE.Group()
+      group.add(mesh)
+      group.add(edge)
+      this.scene.add(group)
+      this.districtGroups[jd.districtId] = { group, mat, edge }
+
+      const div = document.createElement('div')
+      div.className = 'city3d-label city3d-district'
+      div.textContent = jd.name
+      div.addEventListener('click', () => this.callbacks.onSelectDistrict(jd.districtId))
+      const { X, Z } = toXZ(jd.label[0], jd.label[1])
+      const lobj = new CSS2DObject(div)
+      lobj.position.set(X, 10, Z)
+      this.scene.add(lobj)
+      this.districtLabelObjs.push(lobj)
+    }
+
+    // ② 伊通河带（数据驱动，半透明蓝色）
+    const pts = yitongRiver.map(([x, y]) => {
+      const { X, Z } = toXZ(x, y)
+      return new THREE.Vector3(X, 0, Z)
+    })
+    if (pts.length > 1) {
+      const curve = new THREE.CatmullRomCurve3(pts)
+      const samples = curve.getPoints(90)
+      const positions = []
+      const halfW = 5
+      for (let i = 0; i < samples.length - 1; i++) {
+        const p = samples[i]
+        const q = samples[i + 1]
+        const dx = q.x - p.x
+        const dz = q.z - p.z
+        const len = Math.hypot(dx, dz) || 1
+        const nx = (-dz / len) * halfW
+        const nz = (dx / len) * halfW
+        const y = 1.2
+        positions.push(p.x + nx, y, p.z + nz, p.x - nx, y, p.z - nz, q.x + nx, y, q.z + nz)
+        positions.push(p.x - nx, y, p.z - nz, q.x - nx, y, p.z - nz, q.x + nx, y, q.z + nz)
+      }
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x3a95c9,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      })
+      const mesh = new THREE.Mesh(geo, mat)
+      this.scene.add(mesh)
+    }
+
+    // ③ 模型范围外的地标（龙嘉机场）：柱体 + 点击热区 + 可点标签
+    for (const lm of landmarks) {
+      if (lm.districtId !== 'district-jiutai') continue
+      const { X, Z } = toXZ(lm.x, lm.y)
+      const geo = new THREE.CylinderGeometry(4.5, 6, lm.h, 6)
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x38e1ff,
+        emissive: 0x1a9cc4,
+        roughness: 0.3,
+        metalness: 0.4,
+        transparent: true,
+        opacity: 0.95
+      })
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.set(X, lm.h / 2, Z)
+      mesh.userData = { type: 'station', name: lm.name, districtId: lm.districtId, baseY: lm.h / 2, phase: Math.random() * Math.PI * 2 }
+      this.scene.add(mesh)
+      this.landmarkMeshes = this.landmarkMeshes || []
+      this.landmarkMeshes.push(mesh)
+      const hit = new THREE.Mesh(
+        new THREE.SphereGeometry(14, 8, 6),
+        new THREE.MeshBasicMaterial({ visible: false })
+      )
+      hit.position.set(X, lm.h / 2, Z)
+      hit.userData = { type: 'station', name: lm.name, districtId: lm.districtId }
+      this.scene.add(hit)
+      this.landmarkHitMeshes.push(hit)
+      const div = document.createElement('div')
+      div.className = 'landmark-label'
+      div.textContent = lm.name
+      div.addEventListener('click', () => this.callbacks.onSelectLandmark({ type: 'station', name: lm.name, districtId: lm.districtId }))
+      const lobj = new CSS2DObject(div)
+      lobj.position.set(X, lm.h + 8, Z)
+      this.scene.add(lobj)
+    }
+  }
+
+  /** Bloom 后处理：桌面端启用，夜景让模型灯光/线路呈辉光（参数随主题自适应） */
+  _initBloom() {
+    if (isMobile()) return
+    try {
+      const w = this.container.clientWidth || 1
+      const h = this.container.clientHeight || 1
+      this.composer = new EffectComposer(this.renderer)
+      this.composer.addPass(new RenderPass(this.scene, this.camera))
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.4, 0.62)
+      this.composer.addPass(this.bloomPass)
+      this.composer.addPass(new OutputPass())
+      this.setTheme()
+    } catch (err) {
+      console.warn('[CityScene] Bloom 初始化失败，使用直渲', err)
+      this.composer = null
+      this.bloomPass = null
+    }
+  }
+
+  /**
+   * 全量站点补齐：Blender 模型只建了 15 个换乘站的网格，
+   * 其余站点用 InstancedMesh 小柱体补齐（含命中拾取），
+   * 标签进避让队列——换乘站常显，普通站在选中所属区后显示。
+   */
+  buildStationPins() {
+    const known = new Set(this.landmarkHitMeshes.map((m) => m.userData.name).filter(Boolean))
+    const pinGeo = new THREE.CylinderGeometry(1.6, 1.6, 2.6, 8)
+    const list = []
+    for (const line of metroLines) {
+      for (const st of line.stations) {
+        if (known.has(st.name)) continue
+        if (list.some((x) => x.name === st.name)) continue // 同名跨线站物理同一座，去重
+        const { X, Z } = toXZ(st.x, st.y)
+        let districtId = null
+        for (const d of districts) {
+          if (pointInPolygon(st.x, st.y, d.polygon)) {
+            districtId = d.districtId
+            break
+          }
+        }
+        list.push({ name: st.name, x: X, z: Z, districtId, transfer: (st.transfer || []).length > 0 })
+      }
+    }
+    if (!list.length) return
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xdfe9f7,
+      emissive: 0x2b4a78,
+      emissiveIntensity: 0.9,
+      roughness: 0.4,
+      transparent: true,
+      opacity: 0.95
+    })
+    const inst = new THREE.InstancedMesh(pinGeo, mat, list.length)
+    const dummy = new THREE.Object3D()
+    list.forEach((p, i) => {
+      dummy.position.set(p.x, 1.3, p.z)
+      dummy.updateMatrix()
+      inst.setMatrixAt(i, dummy.matrix)
+    })
+    inst.userData = { type: 'stationPin' }
+    this.scene.add(inst)
+    this.stationPins = { inst, list }
+    for (const p of list) {
+      const div = document.createElement('div')
+      div.className = 'city3d-label city3d-station'
+      div.textContent = p.name
+      const lobj = new CSS2DObject(div)
+      lobj.position.set(p.x, 4.6, p.z)
+      this.scene.add(lobj)
+      this.cityLabelCands.push({
+        obj: lobj,
+        name: p.name,
+        districtId: p.districtId,
+        transfer: p.transfer,
+        prio: p.transfer ? 2 : 1,
+        w: p.name.length * 13 + 18,
+        h: 22
+      })
+      div.addEventListener('click', () => {
+        this.callbacks.onSelectLandmark({ type: 'station', name: p.name, districtId: p.districtId })
+      })
+    }
+  }
+
   loadModel() {
     const loader = new GLTFLoader()
     loader.load(
@@ -160,6 +367,7 @@ export class CityScene {
         this.fitModel(model)
         this.scene.add(model)
         this.wireModelInteractions(model)
+        this.buildStationPins()
         this.modelReady = true
         if (this.callbacks.onModelReady) this.callbacks.onModelReady()
         if (!this.userMoved) this.resetView()
@@ -190,6 +398,7 @@ export class CityScene {
     }
 
     const stationMeshes = []
+    const nameDistrict = {}
     const ray = new THREE.Raycaster()
     const tmpWP = new THREE.Vector3()
     const tmpBox = new THREE.Box3()
@@ -220,14 +429,17 @@ export class CityScene {
         const dName = plateMatch[1]
         const districtId = nameToId[dName]
         if (districtId) {
-          const mat = obj.material
-          if (mat && !Array.isArray(mat)) {
-            mat.transparent = true
-            mat.side = THREE.DoubleSide
-          }
+          // GLB 导出时所有轮廓面共享同一材质实例：不 clone 的话 dim/hover
+          // 改一个区会把全部区一起染色（遍历 districts 时互相覆盖）
+          const mat = obj.material && !Array.isArray(obj.material) ? obj.material.clone() : new THREE.MeshStandardMaterial()
+          mat.transparent = true
+          mat.side = THREE.DoubleSide
+          const d = districts.find((x) => x.districtId === districtId)
+          if (d) mat.color.set(new THREE.Color(d.color))
+          obj.material = mat
           obj.userData = { type: 'district', id: districtId }
           this.districtMeshes.push(obj)
-          this.districtGroups[districtId] = { group: null, mat: obj.material, edge: null }
+          this.districtGroups[districtId] = { group: null, mat, edge: null }
         }
       }
 
@@ -248,7 +460,7 @@ export class CityScene {
       const stationMatch = n.match(/^(.+?)_站点(?:外圈)?(?:Mesh)?$/)
       if (stationMatch && !n.includes('投影')) {
         const sName = stationMatch[1]
-        obj.userData = { type: 'landmark', name: sName }
+        obj.userData = { type: 'station', name: sName }
         stationMeshes.push(obj)
       }
 
@@ -296,179 +508,65 @@ export class CityScene {
       const hits = ray.intersectObjects(this.districtMeshes, false)
       if (hits.length) sm.userData.districtId = hits[0].object.userData.id
       this.landmarkHitMeshes.push(sm)
+      nameDistrict[sm.userData.name] = sm.userData.districtId || null
+      if (window.__dbgDistrict !== undefined) window.__dbgDistrict[sm.userData.name] = sm.userData.districtId
     }
-  }
 
-  buildRiver() {
-    const pts = yitongRiver.map(([x, y]) => {
-      const { X, Z } = toXZ(x, y)
-      return new THREE.Vector3(X, 0, Z)
-    })
-    const curve = new THREE.CatmullRomCurve3(pts)
-    const samples = curve.getPoints(90)
-    const positions = []
-    const halfW = 5
-    for (let i = 0; i < samples.length - 1; i++) {
-      const p = samples[i]
-      const q = samples[i + 1]
-      const dx = q.x - p.x
-      const dz = q.z - p.z
-      const len = Math.hypot(dx, dz) || 1
-      const nx = (-dz / len) * halfW
-      const nz = (dx / len) * halfW
-      const y = 1.2
-      positions.push(p.x + nx, y, p.z + nz, p.x - nx, y, p.z - nz, q.x + nx, y, q.z + nz)
-      positions.push(p.x - nx, y, p.z - nz, q.x - nx, y, q.z - nz, q.x + nx, y, q.z + nz)
-    }
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x3a95c9,
-      transparent: true,
-      opacity: 0.85,
-      side: THREE.DoubleSide,
-      depthWrite: false
-    })
-    const mesh = new THREE.Mesh(geo, mat)
-    mesh.name = 'yitong-river'
-    this.scene.add(mesh)
-  }
-
-  districtShape(poly) {
-    const shape = new THREE.Shape()
-    poly.forEach(([x, y], i) => {
-      const { X, Z } = toXZ(x, y)
-      if (i === 0) shape.moveTo(X, Z)
-      else shape.lineTo(X, Z)
-    })
-    return shape
-  }
-
-  buildDistricts() {
-    for (const d of districts) {
-      const group = new THREE.Group()
-      const shape = this.districtShape(d.polygon)
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: d.height, bevelEnabled: false })
-      geo.rotateX(Math.PI / 2)
-      const color = new THREE.Color(d.color)
-      const mat = new THREE.MeshStandardMaterial({
-        color,
-        emissive: color.clone().multiplyScalar(0.12),
-        roughness: 0.65,
-        metalness: 0.1,
-        transparent: true,
-        opacity: 0.92
+    // 站名标签避让：记录候选（换乘判定 + 区归属 + 宽高），每帧由 cullCityLabels 调度
+    for (const lobj of this.stationLabelObjs) {
+      const name = lobj.element.textContent
+      const linesWithName = metroLines.filter((l) => l.stations.some((s) => s.name === name))
+      this.cityLabelCands.push({
+        obj: lobj,
+        name,
+        districtId: nameDistrict[name] || null,
+        transfer: linesWithName.length > 1,
+        prio: linesWithName.length > 1 ? 2 : 1,
+        w: name.length * 13 + 18,
+        h: 22
       })
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.userData = { type: 'district', id: d.districtId }
-      group.add(mesh)
-      this.districtMeshes.push(mesh)
-
-      const edge = new THREE.LineSegments(
-        new THREE.EdgesGeometry(geo),
-        new THREE.LineBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35 })
-      )
-      group.add(edge)
-
-      const labelDiv = document.createElement('div')
-      labelDiv.className = 'city-label'
-      labelDiv.textContent = d.name
-      labelDiv.addEventListener('click', () => this.callbacks.onSelectDistrict(d.districtId))
-      const { X, Z } = toXZ(d.label[0], d.label[1])
-      const labelObj = new CSS2DObject(labelDiv)
-      labelObj.position.set(X, d.height + 14, Z)
-      group.add(labelObj)
-      this.labelPool.push(labelDiv)
-
-      this.scene.add(group)
-      this.districtGroups[d.districtId] = { group, mat, edge }
+      lobj.element.addEventListener('click', () => {
+        const cand = this.cityLabelCands.find((c) => c.obj === lobj)
+        this.callbacks.onSelectLandmark({ type: 'station', name, districtId: cand ? cand.districtId : null })
+      })
     }
   }
 
-  buildBuildings() {
-    const box = new THREE.BoxGeometry(1, 1, 1)
-    const mat = new THREE.MeshStandardMaterial({ color: 0x35507e, roughness: 0.9, transparent: true, opacity: 0.85 })
-    const positions = []
-    const rand = mulberry32(20260904)
-    for (const d of districts) {
-      const xs = d.polygon.map((p) => p[0])
-      const ys = d.polygon.map((p) => p[1])
-      const minX = Math.min(...xs)
-      const maxX = Math.max(...xs)
-      const minY = Math.min(...ys)
-      const maxY = Math.max(...ys)
-      let count = 0
-      let guard = 0
-      const target = 70
-      while (count < target && guard < 600) {
-        guard++
-        const px = minX + rand() * (maxX - minX)
-        const py = minY + rand() * (maxY - minY)
-        if (!pointInPolygon(px, py, d.polygon)) continue
-        const lx = px - d.label[0]
-        const ly = py - d.label[1]
-        if (Math.abs(lx) < 26 && Math.abs(ly) < 26) continue
-        const { X: wx, Z: wz } = toXZ(px, py)
-        positions.push({ x: wx, z: wz, h: 4 + rand() * 14, s: 4 + rand() * 6 })
-        count++
+  /**
+   * 城市层站名标签屏幕避让（轻量版地铁层算法）：
+   * 换乘站常显；选中区划时该区站名全显；按屏幕 x 贪心碰撞剔除。
+   */
+  cullCityLabels() {
+    const el = this.renderer.domElement
+    const w = el.clientWidth
+    const h = el.clientHeight
+    const v = new THREE.Vector3()
+    const placed = []
+    const list = []
+    for (const c of this.cityLabelCands) {
+      const show = c.transfer || (this.selectedId && c.districtId === this.selectedId)
+      if (!show) {
+        c.obj.visible = false
+        continue
       }
+      c.obj.getWorldPosition(v)
+      v.project(this.camera)
+      if (v.z > 1 || v.z < -1) {
+        c.obj.visible = false
+        continue
+      }
+      list.push({ ...c, sx: (v.x * 0.5 + 0.5) * w, sy: (-v.y * 0.5 + 0.5) * h })
     }
-    const inst = new THREE.InstancedMesh(box, mat, positions.length)
-    const dummy = new THREE.Object3D()
-    positions.forEach((p, i) => {
-      dummy.position.set(p.x, p.h / 2, p.z)
-      dummy.scale.set(p.s, p.h, p.s)
-      dummy.updateMatrix()
-      inst.setMatrixAt(i, dummy.matrix)
-    })
-    inst.name = 'buildings'
-    this.scene.add(inst)
-    this.buildingsMesh = inst
-  }
-
-  buildLandmarks() {
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x38e1ff,
-      emissive: 0x1a9cc4,
-      roughness: 0.3,
-      metalness: 0.4,
-      transparent: true,
-      opacity: 0.95
-    })
-    for (const lm of landmarks) {
-      const { X, Z } = toXZ(lm.x, lm.y)
-      const geo = new THREE.CylinderGeometry(4.5, 6, lm.h, 6)
-      const mesh = new THREE.Mesh(geo, mat.clone())
-      mesh.position.set(X, lm.h / 2, Z)
-      mesh.userData = { type: 'landmark', name: lm.name, districtId: lm.districtId, baseY: lm.h / 2, phase: (landmarks.indexOf(lm) * Math.PI * 2) / landmarks.length }
-      this.scene.add(mesh)
-      this.landmarkMeshes = this.landmarkMeshes || []
-      this.landmarkMeshes.push(mesh)
-
-      // 触摸热区：地标柱体只有几像素宽，手指点不中；
-      // 叠一个不可见的大判定球（material.visible=false → 不渲染，但仍可被 raycast 命中）
-      const hitR = Math.max(13, Math.min(lm.h / 2 + 6, 24))
-      const hit = new THREE.Mesh(
-        new THREE.SphereGeometry(hitR, 8, 6),
-        new THREE.MeshBasicMaterial({ visible: false })
-      )
-      hit.position.set(X, lm.h / 2, Z)
-      hit.userData = { type: 'landmark', name: lm.name, districtId: lm.districtId }
-      this.scene.add(hit)
-      this.landmarkHitMeshes.push(hit)
-
-      const labelDiv = document.createElement('div')
-      labelDiv.className = 'landmark-label'
-      labelDiv.textContent = lm.name
-      // 标签可点击：与区划标签一致，点名字即选中地标（弹预览卡）
-      labelDiv.addEventListener('click', () => this.callbacks.onSelectLandmark(lm))
-      const labelObj = new CSS2DObject(labelDiv)
-      labelObj.position.set(X, lm.h + 8, Z)
-      this.scene.add(labelObj)
+    list.sort((a, b) => b.prio - a.prio || a.sx - b.sx)
+    for (const c of list) {
+      const box = { x1: c.sx - c.w / 2, x2: c.sx + c.w / 2, y1: c.sy - c.h, y2: c.sy }
+      const collides = placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1)
+      c.obj.visible = !collides
+      if (!collides) placed.push(box)
     }
   }
 
-  onPointerDown(e) {
+onPointerDown(e) {
     this.downPos = { x: e.clientX, y: e.clientY }
     this.updatePointerFromEvent(e)
     // 触屏没有 hover，pointermove 不会在点击前触发；
@@ -505,6 +603,7 @@ export class CityScene {
   pick() {
     this.raycaster.setFromCamera(this.pointer, this.camera)
     const targets = [...this.districtMeshes, ...this.landmarkHitMeshes]
+    if (this.stationPins) targets.push(this.stationPins.inst)
     const hits = this.raycaster.intersectObjects(targets, false)
     return hits.length ? hits[0].object : null
   }
@@ -557,7 +656,10 @@ export class CityScene {
     if (hit.userData.type === 'district') {
       this.setSelected(hit.userData.id)
       this.callbacks.onSelectDistrict(hit.userData.id)
-    } else if (hit.userData.type === 'landmark') {
+    } else if (hit.userData.type === 'stationPin') {
+      const info = this.stationPins && this.stationPins.list[hit.instanceId]
+      if (info) this.callbacks.onSelectLandmark({ type: 'station', name: info.name, districtId: info.districtId })
+    } else if (hit.userData.type === 'landmark' || hit.userData.type === 'station') {
       this.callbacks.onSelectLandmark(hit.userData)
     }
   }
@@ -633,6 +735,18 @@ export class CityScene {
     if (this.hemiLight) {
       this.hemiLight.groundColor.set(hexToNumber(cssVar('--scene-bounce'), 0x1a2340))
     }
+    if (this.bloomPass) {
+      const light = document.documentElement.classList.contains('theme-light')
+      if (light) {
+        this.bloomPass.strength = 0.18
+        this.bloomPass.threshold = 0.85
+        this.bloomPass.radius = 0.3
+      } else {
+        this.bloomPass.strength = 0.55
+        this.bloomPass.threshold = 0.55
+        this.bloomPass.radius = 0.4
+      }
+    }
   }
 
   /** 详情面板遮挡补偿：上报被面板挡住的右/下边缘宽度（px），取景中心会平滑滑向未遮挡区域 */
@@ -676,6 +790,7 @@ export class CityScene {
     if (!w || !h) return
     this.renderer.setSize(w, h)
     this.labelRenderer.setSize(w, h)
+    if (this.composer) this.composer.setSize(w, h)
 
     const prevPull = this.pull
     this.applyViewport()
@@ -693,13 +808,15 @@ export class CityScene {
     const delta = this.clock.getDelta()
     this.controls.update(delta)
     this._updateViewOffset(delta)
+    this.cullCityLabels()
     if (!this.reduceMotion && this.landmarkMeshes) {
       const t = performance.now() / 1000
       for (const m of this.landmarkMeshes) {
         m.position.y = m.userData.baseY + Math.sin(t * 1.2 + m.userData.phase) * 2.4
       }
     }
-    this.renderer.render(this.scene, this.camera)
+    if (this.composer) this.composer.render(delta)
+    else this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
   }
 
@@ -708,6 +825,14 @@ export class CityScene {
     this.controls.removeEventListener('controlstart', this._onUserInput)
     this.controls.dispose()
     if (this._stopObserving) this._stopObserving()
+    if (this.composer) {
+      try {
+        this.composer.dispose()
+      } catch {
+        /* 个别版本无 dispose，忽略 */
+      }
+      this.composer = null
+    }
     this.renderer.dispose()
     this.scene.traverse((obj) => {
       if (obj.geometry) obj.geometry.dispose()

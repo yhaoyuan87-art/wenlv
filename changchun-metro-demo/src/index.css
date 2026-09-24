@@ -1964,6 +1964,19 @@ html.theme-light .city3d-label {
   color: var(--on-accent-text);
 }
 
+/* 预览卡标题的「站」徽标（区别于区划/地标点击） */
+.city-preview-kind {
+  font-style: normal;
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  vertical-align: 1px;
+}
+
 .poi-strip {
   flex: none;
   display: flex;
@@ -3779,6 +3792,16 @@ textarea:focus-visible,
   .map-brief {
     top: 8px;
     left: 8px;
+  }
+
+  /* 城市 3D：小屏站名/区名标签缩小降透明，减少对模型的遮挡 */
+  .city3d-station {
+    font-size: 9px;
+    opacity: 0.75;
+  }
+
+  .city3d-district {
+    font-size: 13px;
   }
 
   .view-controls {
