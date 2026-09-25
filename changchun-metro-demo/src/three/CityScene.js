@@ -49,7 +49,6 @@ export class CityScene {
     this.districtLabelObjs = []
     this.stationLabelObjs = []
     this.cityLabelCands = []
-    this.dataLineGroups = []
     this.composer = null
     this.bloomPass = null
 
@@ -110,9 +109,6 @@ export class CityScene {
 
     this.buildGround()
     this.buildSupplements()
-    this.buildDataDistricts()
-    this.buildDataLines()
-    this.buildStationPins()
     this.loadModel()
     this._initBloom()
 
@@ -159,7 +155,52 @@ export class CityScene {
    * ③ 龙嘉机场地标（模型范围外）。同伴重新导出模型后可按需删除。
    */
   buildSupplements() {
-    // 伊通河带（数据驱动，半透明蓝色）
+    // ① 九台区
+    const jd = districts.find((x) => x.districtId === 'district-jiutai')
+    if (jd && !this.districtGroups[jd.districtId]) {
+      const shape = new THREE.Shape()
+      jd.polygon.forEach(([x, y], i) => {
+        const { X, Z } = toXZ(x, y)
+        if (i === 0) shape.moveTo(X, Z)
+        else shape.lineTo(X, Z)
+      })
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: 3, bevelEnabled: false })
+      geo.rotateX(Math.PI / 2)
+      const color = new THREE.Color(jd.color)
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color.clone().multiplyScalar(0.12),
+        roughness: 0.65,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.9
+      })
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.userData = { type: 'district', id: jd.districtId }
+      this.districtMeshes.push(mesh)
+      const edge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35 })
+      )
+      edge.position.y = 0.2
+      const group = new THREE.Group()
+      group.add(mesh)
+      group.add(edge)
+      this.scene.add(group)
+      this.districtGroups[jd.districtId] = { group, mat, edge }
+
+      const div = document.createElement('div')
+      div.className = 'city3d-label city3d-district'
+      div.textContent = jd.name
+      div.addEventListener('click', () => this.callbacks.onSelectDistrict(jd.districtId))
+      const { X, Z } = toXZ(jd.label[0], jd.label[1])
+      const lobj = new CSS2DObject(div)
+      lobj.position.set(X, 10, Z)
+      this.scene.add(lobj)
+      this.districtLabelObjs.push(lobj)
+    }
+
+    // ② 伊通河带（数据驱动，半透明蓝色）
     const pts = yitongRiver.map(([x, y]) => {
       const { X, Z } = toXZ(x, y)
       return new THREE.Vector3(X, 0, Z)
@@ -195,7 +236,6 @@ export class CityScene {
     }
 
     // ③ 模型范围外的地标（龙嘉机场）：柱体 + 点击热区 + 可点标签
-    // （注释序号：① 数据区划面/② 线路 已移至 buildDataDistricts / buildDataLines）
     for (const lm of landmarks) {
       if (lm.districtId !== 'district-jiutai') continue
       const { X, Z } = toXZ(lm.x, lm.y)
@@ -257,10 +297,12 @@ export class CityScene {
    * 标签进避让队列——换乘站常显，普通站在选中所属区后显示。
    */
   buildStationPins() {
+    const known = new Set(this.landmarkHitMeshes.map((m) => m.userData.name).filter(Boolean))
     const pinGeo = new THREE.CylinderGeometry(1.6, 1.6, 2.6, 8)
     const list = []
     for (const line of metroLines) {
       for (const st of line.stations) {
+        if (known.has(st.name)) continue
         if (list.some((x) => x.name === st.name)) continue // 同名跨线站物理同一座，去重
         const { X, Z } = toXZ(st.x, st.y)
         let districtId = null
@@ -299,7 +341,6 @@ export class CityScene {
       const lobj = new CSS2DObject(div)
       lobj.position.set(p.x, 4.6, p.z)
       this.scene.add(lobj)
-      this.stationLabelObjs.push(lobj)
       this.cityLabelCands.push({
         obj: lobj,
         name: p.name,
@@ -326,6 +367,7 @@ export class CityScene {
         this.fitModel(model)
         this.scene.add(model)
         this.wireModelInteractions(model)
+        this.buildStationPins()
         this.modelReady = true
         if (this.callbacks.onModelReady) this.callbacks.onModelReady()
         if (!this.userMoved) this.resetView()
@@ -349,116 +391,144 @@ export class CityScene {
   }
 
   wireModelInteractions(model) {
-    // Blender 模型里烘焙的区划面/边界/站点/站名/2号线都是旧数据（六区、坐标不准），
-    // 全部隐藏，改由 buildDataDistricts / buildDataLines / buildStationPins
-    // 用与地铁空间同源的 districts.json / metro-lines.json 绘制，保证两层一致。
-    const HIDE_SUFFIX = [
-      '_参考图轮廓面',
-      '_参考图轮廓面Mesh',
-      '_分区边界',
-      '_分区边界Curve',
-      '_分区边界Mesh',
-      '_站点',
-      '_站点外圈',
-      '_站点Mesh',
-      '_站名',
-      '_站名_投影',
-      '_行政区标签',
-      '_行政区标签_投影'
-    ]
+    const nameToId = {}
+    for (const d of districts) {
+      nameToId[d.name] = d.districtId
+      if (d.name.endsWith('区')) nameToId[d.name.slice(0, -1)] = d.districtId
+    }
+
+    const stationMeshes = []
+    const nameDistrict = {}
+    const ray = new THREE.Raycaster()
+    const tmpWP = new THREE.Vector3()
+    const tmpBox = new THREE.Box3()
+
+    // 先把模型里所有文字相关的 Mesh 隐藏，字体未导出导致方块。
+    // 之后再用 CSS2D 标签覆盖显示真实中文。
     model.traverse((obj) => {
-      if (!obj.isMesh && !obj.isLine && !obj.isLineSegments) return
+      if (!obj.isMesh) return
       const n = obj.name || ''
-      if (HIDE_SUFFIX.some((s) => n.endsWith(s)) || n === '轨道交通2号线') {
+      if (
+        n.endsWith('_行政区标签') ||
+        n.endsWith('_行政区标签_投影') ||
+        n.endsWith('_站名') ||
+        n.endsWith('_站名_投影')
+      ) {
         obj.visible = false
       }
     })
-  }
 
-  /** 数据驱动的 7 区轮廓面 + 边界线 + 区名标签（与地铁空间地面区划同源） */
-  buildDataDistricts() {
-    for (const d of districts) {
-      if (this.districtGroups[d.districtId]) continue
-      const shape = new THREE.Shape()
-      d.polygon.forEach(([x, y], i) => {
-        const { X, Z } = toXZ(x, y)
-        if (i === 0) shape.moveTo(X, Z)
-        else shape.lineTo(X, Z)
-      })
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 3, bevelEnabled: false })
-      geo.rotateX(Math.PI / 2)
-      const color = new THREE.Color(d.color)
-      const mat = new THREE.MeshStandardMaterial({
-        color,
-        emissive: color.clone().multiplyScalar(0.12),
-        roughness: 0.65,
-        metalness: 0.1,
-        transparent: true,
-        opacity: 0.9
-      })
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.userData = { type: 'district', id: d.districtId }
-      this.districtMeshes.push(mesh)
-      const edge = new THREE.LineSegments(
-        new THREE.EdgesGeometry(geo),
-        new THREE.LineBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.35 })
-      )
-      edge.position.y = 0.2
-      const group = new THREE.Group()
-      group.add(mesh)
-      group.add(edge)
-      this.scene.add(group)
-      this.districtGroups[d.districtId] = { group, mat, edge }
+    model.updateMatrixWorld(true)
 
-      const div = document.createElement('div')
-      div.className = 'city3d-label city3d-district'
-      div.textContent = d.name
-      div.addEventListener('click', () => this.callbacks.onSelectDistrict(d.districtId))
-      const { X, Z } = toXZ(d.label[0], d.label[1])
-      const lobj = new CSS2DObject(div)
-      lobj.position.set(X, 10, Z)
-      this.scene.add(lobj)
-      this.districtLabelObjs.push(lobj)
+    model.traverse((obj) => {
+      if (!obj.isMesh) return
+      const n = obj.name || ''
+
+      const plateMatch = n.match(/^(.+?)_参考图轮廓面(?:Mesh)?$/)
+      if (plateMatch) {
+        const dName = plateMatch[1]
+        const districtId = nameToId[dName]
+        if (districtId) {
+          // GLB 导出时所有轮廓面共享同一材质实例：不 clone 的话 dim/hover
+          // 改一个区会把全部区一起染色（遍历 districts 时互相覆盖）
+          const mat = obj.material && !Array.isArray(obj.material) ? obj.material.clone() : new THREE.MeshStandardMaterial()
+          mat.transparent = true
+          mat.side = THREE.DoubleSide
+          const d = districts.find((x) => x.districtId === districtId)
+          if (d) mat.color.set(new THREE.Color(d.color))
+          obj.material = mat
+          obj.userData = { type: 'district', id: districtId }
+          this.districtMeshes.push(obj)
+          this.districtGroups[districtId] = { group: null, mat, edge: null }
+        }
+      }
+
+      const edgeMatch = n.match(/^(.+?)_分区边界(?:Curve|Mesh)?$/)
+      if (edgeMatch) {
+        const dName = edgeMatch[1]
+        const districtId = nameToId[dName]
+        if (districtId) {
+          const entry = this.districtGroups[districtId]
+          if (entry) {
+            entry.edge = obj
+            const mat = obj.material
+            if (mat && !Array.isArray(mat)) mat.transparent = true
+          }
+        }
+      }
+
+      const stationMatch = n.match(/^(.+?)_站点(?:外圈)?(?:Mesh)?$/)
+      if (stationMatch && !n.includes('投影')) {
+        const sName = stationMatch[1]
+        obj.userData = { type: 'station', name: sName }
+        stationMeshes.push(obj)
+      }
+
+      // 区名标签：用 CSS2D 覆盖，避免 Blender 字体烘焙失败导致的方块
+      const distLabelMatch = n.match(/^(.+?)_行政区标签$/)
+      if (distLabelMatch) {
+        const dName = distLabelMatch[1]
+        const districtId = nameToId[dName]
+        obj.getWorldPosition(tmpWP)
+        tmpBox.setFromObject(obj)
+        const center = tmpBox.getCenter(new THREE.Vector3())
+        const div = document.createElement('div')
+        div.className = 'city3d-label city3d-district'
+        div.textContent = dName
+        if (districtId) {
+          div.addEventListener('click', () => this.callbacks.onSelectDistrict(districtId))
+        }
+        const lobj = new CSS2DObject(div)
+        lobj.position.copy(center)
+        lobj.userData = { districtId }
+        this.scene.add(lobj)
+        this.districtLabelObjs.push(lobj)
+      }
+
+      // 站名标签
+      const stLabelMatch = n.match(/^(.+?)_站名$/)
+      if (stLabelMatch) {
+        const sName = stLabelMatch[1]
+        tmpBox.setFromObject(obj)
+        const center = tmpBox.getCenter(new THREE.Vector3())
+        const div = document.createElement('div')
+        div.className = 'city3d-label city3d-station'
+        div.textContent = sName
+        const lobj = new CSS2DObject(div)
+        lobj.position.copy(center)
+        this.scene.add(lobj)
+        this.stationLabelObjs.push(lobj)
+      }
+    })
+
+    for (const sm of stationMeshes) {
+      const wp = new THREE.Vector3()
+      sm.getWorldPosition(wp)
+      ray.set(new THREE.Vector3(wp.x, 1000, wp.z), new THREE.Vector3(0, -1, 0))
+      const hits = ray.intersectObjects(this.districtMeshes, false)
+      if (hits.length) sm.userData.districtId = hits[0].object.userData.id
+      this.landmarkHitMeshes.push(sm)
+      nameDistrict[sm.userData.name] = sm.userData.districtId || null
+      if (window.__dbgDistrict !== undefined) window.__dbgDistrict[sm.userData.name] = sm.userData.districtId
     }
-  }
 
-  /** 数据驱动的地铁线路：与地铁空间同一份 metro-lines.json，坐标/颜色完全一致 */
-  buildDataLines() {
-    const UP = new THREE.Vector3(0, 1, 0)
-    for (const line of metroLines) {
-      const pts = line.stations.map((s) => {
-        const { X, Z } = toXZ(s.x, s.y)
-        return new THREE.Vector3(X, 4, Z)
+    // 站名标签避让：记录候选（换乘判定 + 区归属 + 宽高），每帧由 cullCityLabels 调度
+    for (const lobj of this.stationLabelObjs) {
+      const name = lobj.element.textContent
+      const linesWithName = metroLines.filter((l) => l.stations.some((s) => s.name === name))
+      this.cityLabelCands.push({
+        obj: lobj,
+        name,
+        districtId: nameDistrict[name] || null,
+        transfer: linesWithName.length > 1,
+        prio: linesWithName.length > 1 ? 2 : 1,
+        w: name.length * 13 + 18,
+        h: 22
       })
-      const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(line.color),
-        emissive: new THREE.Color(line.color).multiplyScalar(0.55),
-        emissiveIntensity: 1,
-        roughness: 0.35,
-        metalness: 0.2,
-        transparent: true,
-        opacity: 0.95
+      lobj.element.addEventListener('click', () => {
+        const cand = this.cityLabelCands.find((c) => c.obj === lobj)
+        this.callbacks.onSelectLandmark({ type: 'station', name, districtId: cand ? cand.districtId : null })
       })
-      const group = new THREE.Group()
-      for (let i = 1; i < pts.length; i += 1) {
-        const a = pts[i - 1]
-        const b = pts[i]
-        const dir = new THREE.Vector3().subVectors(b, a)
-        const len = dir.length()
-        if (len < 0.001) continue
-        const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, len, 6, 1, false), mat)
-        seg.position.copy(a).addScaledVector(dir, 0.5)
-        seg.quaternion.setFromUnitVectors(UP, dir.clone().normalize())
-        group.add(seg)
-      }
-      const jointGeo = new THREE.SphereGeometry(0.95, 8, 6)
-      for (const p of pts) {
-        const joint = new THREE.Mesh(jointGeo, mat)
-        joint.position.copy(p)
-        group.add(joint)
-      }
-      this.scene.add(group)
-      this.dataLineGroups.push({ group, mat, lineId: line.lineId })
     }
   }
 
@@ -601,20 +671,16 @@ onPointerDown(e) {
       if (!entry || !entry.mat) continue
       const selected = d.districtId === id
       const dim = id && !selected
-      entry.mat.opacity = dim ? 0.24 : 0.92
+      entry.mat.opacity = dim ? 0.28 : 0.95
       const baseColor = new THREE.Color(d.color)
       if (selected) {
-        // 选中：本色提亮（青色 emissive 会把橙/紫等本色洗灰）
-        entry.mat.emissive.copy(baseColor).multiplyScalar(0.55)
-        entry.mat.emissiveIntensity = 1
+        entry.mat.emissive.set(0x2ba8d8)
+        entry.mat.emissiveIntensity = 0.55
       } else {
         entry.mat.emissive.copy(baseColor).multiplyScalar(0.12)
         entry.mat.emissiveIntensity = 1
       }
-      if (entry.edge) {
-        entry.edge.material.opacity = selected ? 0.9 : 0.35
-        entry.edge.material.color.set(selected ? 0x38e1ff : 0x9fd8ff)
-      }
+      if (entry.edge) entry.edge.material.opacity = selected ? 0.9 : 0.35
       if (entry.group) entry.group.position.y = 0
     }
     if (id) this.focusDistrict(id)
