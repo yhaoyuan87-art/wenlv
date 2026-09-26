@@ -83,6 +83,7 @@ export class MetroScene {
     this.winter = false
     this.snow = null
     this.snowMeta = null
+    this.lastRippleAt = -10
     // ---- 规划幽灵层 / Bloom ----
     this.ghostEntries = []
     this.composer = null
@@ -453,7 +454,7 @@ export class MetroScene {
           dir: k === 0 ? 1 : -1,
           s: entry.total * (k === 0 ? 0.1 : 0.55),
           v: 0,
-          cruise: 34,
+          cruise: 29,
           dwell: k * 0.4,
           cars
         }
@@ -579,8 +580,16 @@ export class MetroScene {
       train.dwell = 0.75
       this._pulseStation(entry, idx)
       this._flashStationLabel(entry, idx)
+      // 进站波纹降频：全局冷却 1.4s + 仅聚焦线路触发，避免全网此起彼伏过于嘈杂
       const stMesh = entry.stationMeshes[idx]
-      if (stMesh) this.spawnRipple(stMesh.position.x, stMesh.position.z, entry.tubeMat.color)
+      if (
+        stMesh &&
+        this.elapsed - this.lastRippleAt > 1.4 &&
+        (!this.selectedLineId || this.selectedLineId === train.lineId)
+      ) {
+        this.lastRippleAt = this.elapsed
+        this.spawnRipple(stMesh.position.x, stMesh.position.z, entry.tubeMat.color)
+      }
       const len = cum.length
       if (idx === 0) {
         train.dir = 1

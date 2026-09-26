@@ -283,6 +283,19 @@ export default function MetroLayer() {
     sceneRef.current?.setWinter(next)
   }
 
+  // 全屏：监听系统状态（F11 退出等也能同步按钮态）
+  const [fullscreen, setFullscreen] = useState(() => !!document.fullscreenElement)
+  useEffect(() => {
+    const onFs = () => setFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFs)
+    return () => document.removeEventListener('fullscreenchange', onFs)
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen()
+    else document.documentElement.requestFullscreen()
+  }
+
   const setCamera = (mode) => {
     const scene = sceneRef.current
     if (!scene) return
@@ -356,6 +369,13 @@ export default function MetroLayer() {
           }}
         >
           漫游
+        </button>
+        <button
+          className={'view-btn' + (fullscreen ? ' on' : '')}
+          title={fullscreen ? '退出全屏' : '全屏显示'}
+          onClick={toggleFullscreen}
+        >
+          {fullscreen ? '退出全屏' : '全屏'}
         </button>
       </div>
 
