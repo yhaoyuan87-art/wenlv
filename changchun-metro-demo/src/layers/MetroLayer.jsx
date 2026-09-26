@@ -251,9 +251,14 @@ export default function MetroLayer() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // 交互打点：任何点击 / 滚轮 / 按键都会重置闲置计时并退出漫游
+  // 交互打点：画面点击 / 滚轮 / 按键会重置闲置计时并退出漫游。
+  // 控件区（视图按钮 / 规划面板 / 提示 chip）内的事件不参与，
+  // 否则「漫游」按钮自身的点击会先被全局捕获退出、onClick 又重新进入，状态错乱。
   useEffect(() => {
-    const mark = () => sceneRef.current?.markInteraction()
+    const mark = (e) => {
+      if (e.target && e.target.closest && e.target.closest('.view-controls, .roam-chip, .route-planner, .route-card, .city-preview')) return
+      sceneRef.current?.markInteraction()
+    }
     window.addEventListener('pointerdown', mark, true)
     window.addEventListener('wheel', mark, { capture: true, passive: true })
     window.addEventListener('keydown', mark, true)
@@ -264,7 +269,7 @@ export default function MetroLayer() {
     }
   }, [])
 
-  // 规划面板 / 剖面打开期间不进入自由漫游
+  // 规划面板 / 剖面打开期间禁用漫游按钮
   useEffect(() => {
     sceneRef.current?.setRoamAllowed(!(plannerOpen || section))
   }, [plannerOpen, section])
@@ -338,6 +343,19 @@ export default function MetroLayer() {
         </button>
         <button className={'view-btn' + (winter ? ' on' : '')} onClick={toggleWinter} title="冰雪模式：飘雪 + 地面结霜">
           冬季
+        </button>
+        <button
+          className={'view-btn' + (roam ? ' on' : '')}
+          disabled={!roam && (plannerOpen || section)}
+          title={roam ? '退出自由漫游' : '自由漫游：镜头沿线网自动巡游'}
+          onClick={() => {
+            const sc = sceneRef.current
+            if (!sc) return
+            if (sc.roaming) sc.markInteraction()
+            else sc.enterRoam()
+          }}
+        >
+          漫游
         </button>
       </div>
 

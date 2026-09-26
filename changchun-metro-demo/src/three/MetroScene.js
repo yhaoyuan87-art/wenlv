@@ -148,7 +148,6 @@ export class MetroScene {
     this.buildTrains()
     this.buildLineComets()
     this.buildGhostLines()
-    this.buildAmbient()
     this.buildTransferGlows()
     this._initBloom()
     this.updateLabels(null, null)
@@ -1546,7 +1545,7 @@ export class MetroScene {
     if (!v && this.roaming) this.exitRoam()
   }
 
-  /** 自由漫游：闲置 8 秒自动进入，相机沿线网缓慢巡航，任意交互退出 */
+  /** 自由漫游：手动开启，相机沿线网缓慢巡航，任意交互退出 */
   enterRoam() {
     if (this.roaming || this.reduceMotion || this.followTrain || this._intro || this.section) return
     const ids = Object.keys(this.lineEntries)
@@ -1687,16 +1686,11 @@ export class MetroScene {
     this._updatePulses(delta)
     this._updateRoute(delta)
     this._updateGhost(delta)
-    this._updateAmbient()
     this._updateTransferGlows()
     this._updateRipples(delta)
     this._updateComets(delta)
     this._updateRoam(delta)
     this._updateSnow(delta)
-    // 闲置 8 秒自动进入自由漫游
-    if (!this.roaming && this.roamAllowed && !this.reduceMotion && this.elapsed - this.lastInteraction > 8) {
-      this.enterRoam()
-    }
     this.cullLabels()
     if (this.composer) this.composer.render(delta)
     else this.renderer.render(this.scene, this.camera)
@@ -1716,80 +1710,8 @@ export class MetroScene {
    * 氛围层：夜空星星穹顶 + 场内漂浮微尘（Points，性能极轻）。
    * 星星仅夜间主题显示；移动端数量减半。
    */
-  buildAmbient() {
-    const mobile = isMobile()
-    // 星星穹顶（克数量：点缀而非铺满，避免喧宾夺主）
-    const starN = mobile ? 260 : 380
-    const starPos = new Float32Array(starN * 3)
-    for (let i = 0; i < starN; i += 1) {
-      const az = Math.random() * Math.PI * 2
-      const el = 0.18 + Math.random() * 1.15 // 仰角弧度（避免贴地平线）
-      const r = 1500 + Math.random() * 900
-      starPos[i * 3] = Math.cos(el) * Math.cos(az) * r
-      starPos[i * 3 + 1] = Math.sin(el) * r
-      starPos[i * 3 + 2] = Math.cos(el) * Math.sin(az) * r
-    }
-    const starGeo = new THREE.BufferGeometry()
-    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3))
-    this.starMat = new THREE.PointsMaterial({
-      color: 0xbfd4ff,
-      size: 2,
-      sizeAttenuation: false,
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    })
-    this.stars = new THREE.Points(starGeo, this.starMat)
-    this.stars.name = 'ambient-stars'
-    this.scene.add(this.stars)
-
-    // 漂浮微尘
-    const dustN = mobile ? 60 : 110
-    const dustPos = new Float32Array(dustN * 3)
-    this.dustMeta = []
-    for (let i = 0; i < dustN; i += 1) {
-      const x = -650 + Math.random() * 1300
-      const y = 6 + Math.random() * 90
-      const z = -480 + Math.random() * 960
-      dustPos[i * 3] = x
-      dustPos[i * 3 + 1] = y
-      dustPos[i * 3 + 2] = z
-      this.dustMeta.push({ bx: x, by: y, bz: z, phase: Math.random() * Math.PI * 2, speed: 0.2 + Math.random() * 0.3 })
-    }
-    const dustGeo = new THREE.BufferGeometry()
-    dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3))
-    this.dustMat = new THREE.PointsMaterial({
-      color: 0x9fd8ff,
-      size: 1.6,
-      sizeAttenuation: false,
-      transparent: true,
-      opacity: 0.35,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    })
-    this.dust = new THREE.Points(dustGeo, this.dustMat)
-    this.dust.name = 'ambient-dust'
-    this.scene.add(this.dust)
-  }
-
-  /** 微尘漂浮 + 星星呼吸 */
-  _updateAmbient() {
-    const t = this.elapsed
-    if (this.starMat) this.starMat.opacity = 0.48 + 0.12 * Math.sin(t * 0.7)
-    if (this.dust && !this.reduceMotion) {
-      const pos = this.dust.geometry.attributes.position
-      for (let i = 0; i < this.dustMeta.length; i += 1) {
-        const m = this.dustMeta[i]
-        pos.array[i * 3] = m.bx + Math.sin(t * 0.12 + m.phase * 1.7) * 12
-        pos.array[i * 3 + 1] = m.by + Math.sin(t * m.speed + m.phase) * 7
-        pos.array[i * 3 + 2] = m.bz + Math.cos(t * 0.1 + m.phase) * 12
-      }
-      pos.needsUpdate = true
-    }
-  }
-
-  /**
+/** 微尘漂浮 + 星星呼吸 */
+/**
    * 换乘站能量井：渐变光柱 + 贴地光圈呼吸（20 个换乘站，枢纽地标感）。
    * 材质每站独立以便相位错开的呼吸。
    */
