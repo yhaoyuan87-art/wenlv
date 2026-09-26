@@ -1317,6 +1317,12 @@ export class MetroScene {
   }
 
   cullLabels() {
+    // 漫游穿行楼群时站名标签会随视角高频翻转闪烁（「一卡一卡」的观感来源），
+    // 漫游期间干脆全部隐藏，画面干净
+    if (this.roaming) {
+      for (const c of this.labelCandidates) if (c.obj) c.obj.visible = false
+      return
+    }
     const el = this.renderer.domElement
     const w = el.clientWidth
     const h = el.clientHeight
@@ -1550,6 +1556,7 @@ export class MetroScene {
       s: Math.random() * 0.3,
       dir: 1
     }
+    this.roamBlend = 0
     this.roaming = true
     this.controls.enabled = false
     const dirV = new THREE.Vector3()
@@ -1573,7 +1580,10 @@ export class MetroScene {
       this.exitRoam()
       return
     }
-    this.roam.s += dt * 60 * this.roam.dir
+    // 入场平滑过渡（1.5s），之后按弧长参数化**匀速直读**——
+    // 不做每帧 lerp 追赶（目标本身在动，追赶式 lerp 会产生非匀速顿挫）
+    this.roamBlend = Math.min(1, (this.roamBlend || 0) + dt / 1.5)
+    this.roam.s += dt * 34 * this.roam.dir
     if (this.roam.s >= entry.total) {
       // 到达端点：换一条随机线继续巡游
       const ids = Object.keys(this.lineEntries).filter((id) => id !== this.roam.lineId)
@@ -1584,9 +1594,16 @@ export class MetroScene {
     const { pos, tangent } = this._sample(next.pts, next.cum, this.roam.s)
     if (this.roam.dir < 0) tangent.negate()
     const camPos = pos.clone().addScaledVector(tangent, -150).add(new THREE.Vector3(0, 95, 0))
-    this.camera.position.lerp(camPos, 1 - Math.exp(-dt * 2))
-    this._roamLook.lerp(pos.clone().addScaledVector(tangent, 70), Math.min(1, dt * 2.5))
-    this.camera.lookAt(this._roamLook)
+    const look = pos.clone().addScaledVector(tangent, 70)
+    if (this.roamBlend < 1) {
+      const k = 1 - Math.exp(-dt * 2.2)
+      this.camera.position.lerp(camPos, k)
+      this._roamLook.lerp(look, Math.min(1, dt * 2.5))
+      this.camera.lookAt(this._roamLook)
+    } else {
+      this.camera.position.copy(camPos)
+      this.camera.lookAt(look)
+    }
   }
 
   /** 冰雪模式：雪花粒子（懒构建）+ 地面泛霜（主题感知） */
@@ -1701,8 +1718,8 @@ export class MetroScene {
    */
   buildAmbient() {
     const mobile = isMobile()
-    // 星星穹顶
-    const starN = mobile ? 320 : 720
+    // 星星穹顶（克数量：点缀而非铺满，避免喧宾夺主）
+    const starN = mobile ? 260 : 380
     const starPos = new Float32Array(starN * 3)
     for (let i = 0; i < starN; i += 1) {
       const az = Math.random() * Math.PI * 2
@@ -1716,10 +1733,10 @@ export class MetroScene {
     starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3))
     this.starMat = new THREE.PointsMaterial({
       color: 0xbfd4ff,
-      size: 2.4,
+      size: 2,
       sizeAttenuation: false,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.55,
       depthWrite: false,
       blending: THREE.AdditiveBlending
     })
@@ -1728,7 +1745,7 @@ export class MetroScene {
     this.scene.add(this.stars)
 
     // 漂浮微尘
-    const dustN = mobile ? 90 : 200
+    const dustN = mobile ? 60 : 110
     const dustPos = new Float32Array(dustN * 3)
     this.dustMeta = []
     for (let i = 0; i < dustN; i += 1) {
@@ -1744,10 +1761,10 @@ export class MetroScene {
     dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3))
     this.dustMat = new THREE.PointsMaterial({
       color: 0x9fd8ff,
-      size: 1.7,
+      size: 1.6,
       sizeAttenuation: false,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.35,
       depthWrite: false,
       blending: THREE.AdditiveBlending
     })
@@ -1759,7 +1776,7 @@ export class MetroScene {
   /** 微尘漂浮 + 星星呼吸 */
   _updateAmbient() {
     const t = this.elapsed
-    if (this.starMat) this.starMat.opacity = 0.68 + 0.16 * Math.sin(t * 0.7)
+    if (this.starMat) this.starMat.opacity = 0.48 + 0.12 * Math.sin(t * 0.7)
     if (this.dust && !this.reduceMotion) {
       const pos = this.dust.geometry.attributes.position
       for (let i = 0; i < this.dustMeta.length; i += 1) {
