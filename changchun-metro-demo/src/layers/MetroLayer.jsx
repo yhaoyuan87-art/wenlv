@@ -362,14 +362,20 @@ export default function MetroLayer() {
   return (
     <div className="three-host" ref={hostRef}>
       <div className="metro-compass" aria-hidden="true">
-        <div className="compass-dial">
-          <i ref={needleRef} />
-        </div>
-        <b>N</b>
+        <svg className="compass-svg" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r="19" className="cp-ring" />
+          <circle cx="22" cy="22" r="15" className="cp-ring inner" />
+          <g ref={needleRef} className="cp-needle">
+            <polygon points="22,8.5 25,22 19,22" className="cp-needle-north" />
+            <polygon points="22,35.5 19,22 25,22" className="cp-needle-south" />
+          </g>
+          <circle cx="22" cy="22" r="2.2" className="cp-hub" />
+          <text x="22" y="7.6" className="cp-n">N</text>
+        </svg>
       </div>
       <div className="metro-scale" aria-hidden="true">
-        <i ref={scaleBarRef} />
         <span ref={scaleLabelRef}>100</span>
+        <i ref={scaleBarRef} />
       </div>
       <div className="view-controls">
         {VIEWS.map((v) => (
