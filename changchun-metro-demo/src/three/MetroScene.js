@@ -1475,9 +1475,9 @@ export class MetroScene {
     if (this.winter && !this.snowGround) {
       const g = new THREE.PlaneGeometry(2200, 1800)
       const m = new THREE.MeshBasicMaterial({
-        color: 0x9fb8d8,
+        color: 0x8fb3d9,
         transparent: true,
-        opacity: 0.16,
+        opacity: 0.3,
         depthWrite: false
       })
       this.snowGround = new THREE.Mesh(g, m)
@@ -1487,7 +1487,7 @@ export class MetroScene {
     }
     if (this.snowGround) {
       this.snowGround.visible = this.winter
-      this.snowGround.material.opacity = this.winter ? 0.16 : 0
+      this.snowGround.material.opacity = this.winter ? 0.3 : 0
     }
     // 氛围层主题联动：星星仅夜间可见，微尘白天降透明
     const cityLight = document.documentElement.classList.contains('theme-light')
@@ -1614,16 +1614,34 @@ export class MetroScene {
     }
   }
 
-  /** 冰雪模式：雪花粒子（懒构建）+ 地面泛霜（主题感知） */
+  /** 冰雪模式 v2：雪落在「该落的地方」——线路覆雪、车顶积雪、地面结霜、呼吸变慢 */
   setWinter(v) {
     this.winter = v
     if (v && !this.snow) this._buildSnow()
     if (this.snow) this.snow.visible = v
+    // 线路/列车「覆雪」：本色向雪白靠拢 40%，夜间发光相应变柔
+    const WHITE = new THREE.Color(0xeef4ff)
+    for (const line of metroLines) {
+      const entry = this.lineEntries[line.lineId]
+      if (!entry) continue
+      const base = new THREE.Color(line.color)
+      const snowy = base.clone().lerp(WHITE, 0.42)
+      entry.tubeMat.color.copy(v ? snowy : base)
+      entry.tubeMat.emissive.copy((v ? snowy : base).clone().multiplyScalar(0.45))
+      if (entry.trainMat) {
+        entry.trainMat.color.copy(v ? snowy.clone().lerp(WHITE, 0.25) : base)
+        entry.trainMat.emissive.copy((v ? snowy : base).clone().multiplyScalar(0.75))
+      }
+      if (entry.roofMat) {
+        // 车顶积雪：冬季顶棚近乎纯白
+        entry.roofMat.color.copy(v ? new THREE.Color(0xe9f1fa) : new THREE.Color(base).multiplyScalar(0.55))
+      }
+    }
     this.setTheme()
   }
 
   _buildSnow() {
-    const n = isMobile() ? 450 : 1100
+    const n = isMobile() ? 450 : 1000
     const pos = new Float32Array(n * 3)
     this.snowMeta = []
     for (let i = 0; i < n; i += 1) {
@@ -1633,16 +1651,16 @@ export class MetroScene {
       pos[i * 3] = x
       pos[i * 3 + 1] = y
       pos[i * 3 + 2] = z
-      this.snowMeta.push({ speed: 11 + Math.random() * 19, sway: 3 + Math.random() * 6, phase: Math.random() * Math.PI * 2, bx: x })
+      this.snowMeta.push({ speed: 8 + Math.random() * 14, sway: 3 + Math.random() * 6, phase: Math.random() * Math.PI * 2, bx: x })
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
     this.snowMat = new THREE.PointsMaterial({
       color: 0xffffff,
-      size: 2.1,
-      sizeAttenuation: false,
+      size: 3.2,
+      sizeAttenuation: true,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.78,
       depthWrite: false
     })
     this.snow = new THREE.Points(geo, this.snowMat)
@@ -1765,8 +1783,10 @@ export class MetroScene {
   _updateTransferGlows() {
     if (this.reduceMotion) return
     const t = this.elapsed
+    // 冬季呼吸变慢（寒冷感）：频率减半
+    const rate = this.winter ? 0.8 : 1.6
     for (const g of this.transferGlows) {
-      const k = 0.5 + 0.5 * Math.sin(t * 1.6 + g.phase)
+      const k = 0.5 + 0.5 * Math.sin(t * rate + g.phase)
       g.pillarMat.opacity = 0.09 + 0.07 * k
       g.ringMat.opacity = 0.18 + 0.16 * k
       g.ring.scale.setScalar(1 + 0.09 * k)
