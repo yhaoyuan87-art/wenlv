@@ -42,6 +42,10 @@ export default function MetroLayer() {
   const [strategy, setStrategy] = useState('fast')
   // 策略要被 render 外的回调（3D 点选）读到，镜像成 ref
   const strategyRef = useRef('fast')
+  // 罗盘指针 + 动态比例尺的 DOM 引用（rAF 每帧随镜头更新）
+  const needleRef = useRef(null)
+  const scaleBarRef = useRef(null)
+  const scaleLabelRef = useRef(null)
   // 主题路线纯派生：景点站串联（相邻段 findRoute + 同线合并），无需 effect/state
   const themeRoute = useMemo(() => {
     if (!themeMeta) return null
@@ -277,6 +281,30 @@ export default function MetroLayer() {
   // 组件卸载时把跟随态复位（下次进层是全新场景，无需额外处理）
   useEffect(() => () => setFollow(false), [])
 
+  // 罗盘 + 比例尺：每帧读镜头方位角与目标距离，节流更新比例尺文字
+  useEffect(() => {
+    let raf = 0
+    let frame = 0
+    const tick = () => {
+      raf = requestAnimationFrame(tick)
+      const sc = sceneRef.current
+      if (!sc || sc.disposed) return
+      frame += 1
+      const az = sc.controls.azimuthAngle ?? 0
+      if (needleRef.current) needleRef.current.style.transform = `rotate(${az}rad)`
+      if (frame % 10 !== 0) return
+      const dist = sc.controls.distance || sc.controls.distToTarget || 600
+      const hostH = hostRef.current ? hostRef.current.clientHeight : 800
+      const pxPerWorld = hostH / 2 / (Math.tan((sc.camera.fov * Math.PI) / 360) * dist)
+      const target = [50, 100, 200, 400, 800].find((u) => u * pxPerWorld >= 46) || 800
+      const px = Math.round(target * pxPerWorld)
+      if (scaleBarRef.current) scaleBarRef.current.style.width = `${px}px`
+      if (scaleLabelRef.current) scaleLabelRef.current.textContent = `${target} 单位`
+    }
+    tick()
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
   const toggleWinter = () => {
     const next = !winter
     setWinter(next)
@@ -333,6 +361,16 @@ export default function MetroLayer() {
 
   return (
     <div className="three-host" ref={hostRef}>
+      <div className="metro-compass" aria-hidden="true">
+        <div className="compass-dial">
+          <i ref={needleRef} />
+        </div>
+        <b>N</b>
+      </div>
+      <div className="metro-scale" aria-hidden="true">
+        <i ref={scaleBarRef} />
+        <span ref={scaleLabelRef}>100</span>
+      </div>
       <div className="view-controls">
         {VIEWS.map((v) => (
           <button

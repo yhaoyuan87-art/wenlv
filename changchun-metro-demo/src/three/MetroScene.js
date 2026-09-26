@@ -149,6 +149,7 @@ export class MetroScene {
     this.buildTrains()
     this.buildLineComets()
     this.buildGhostLines()
+    this.buildNebula()
     this.buildTransferGlows()
     this._initBloom()
     this.updateLabels(null, null)
@@ -393,6 +394,7 @@ export class MetroScene {
         pts,
         cum,
         total: cum[cum.length - 1],
+        breathPhase: li * 1.35,
         stationIndexById,
         line
       }
@@ -523,6 +525,45 @@ export class MetroScene {
       this.scene.add(labelObj)
       this.ghostEntries.push({ mat, phase: gi * 2.1 })
     })
+  }
+
+  /** 背景星云：程序化渐变夜空（远处垂幕，俯视时侧棱不可见），替代点状星空的含蓄方案 */
+  buildNebula() {
+    const cv = document.createElement('canvas')
+    cv.width = 1024
+    cv.height = 256
+    const ctx = cv.getContext('2d')
+    ctx.fillStyle = '#0a0f1c'
+    ctx.fillRect(0, 0, 1024, 256)
+    const blob = (x, y, r, color) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r)
+      g.addColorStop(0, color)
+      g.addColorStop(1, 'rgba(10, 15, 28, 0)')
+      ctx.fillStyle = g
+      ctx.fillRect(x - r, y - r, r * 2, r * 2)
+    }
+    blob(180, 120, 190, 'rgba(56, 120, 255, 0.34)')
+    blob(460, 90, 150, 'rgba(123, 92, 255, 0.3)')
+    blob(720, 150, 210, 'rgba(56, 225, 255, 0.22)')
+    blob(920, 80, 160, 'rgba(90, 60, 200, 0.3)')
+    const tex = new THREE.CanvasTexture(cv)
+    tex.colorSpace = THREE.SRGBColorSpace
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false,
+      fog: false
+    })
+    const mk = (z, rotY) => {
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(3600, 900), mat)
+      plane.position.set(0, 420, z)
+      plane.rotation.y = rotY
+      this.scene.add(plane)
+      return plane
+    }
+    this.nebula = mk(-2100, Math.PI)
+    this.nebula2 = mk(2100, 0)
   }
 
   /**
@@ -1724,12 +1765,25 @@ export class MetroScene {
     this._updateTransferGlows()
     this._updateRipples(delta)
     this._updateComets(delta)
+    this._updateLineBreath()
     this._updateRoam(delta)
     this._updateSnow(delta)
     this.cullLabels()
     if (this.composer) this.composer.render(delta)
     else this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
+  }
+
+  /** 聚焦线路的呼吸灯：管道辉光缓慢明暗（隧道导向灯带的感觉），hover 时不叠加 */
+  _updateLineBreath() {
+    if (this.reduceMotion || !this.selectedLineId || this.routeLineIds) return
+    for (const line of metroLines) {
+      const entry = this.lineEntries[line.lineId]
+      if (!entry || line.lineId !== this.selectedLineId) continue
+      if (this.hoverLineId === line.lineId) continue
+      const k = 0.5 + 0.5 * Math.sin(this.elapsed * 1.3 + (entry.breathPhase || 0))
+      entry.tubeMat.emissiveIntensity = 1 + 0.3 * k
+    }
   }
 
   /** 幽灵层呼吸（base 可选：机场弧线用更高基准透明度） */
