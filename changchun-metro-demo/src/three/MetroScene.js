@@ -73,6 +73,16 @@ export class MetroScene {
     // ---- 开场运镜 ----
     this._intro = null
     this._introLook = new THREE.Vector3()
+    // ---- 自由漫游 ----
+    this.lastInteraction = 0
+    this.roaming = false
+    this.roamAllowed = true
+    this.roam = null
+    this._roamLook = new THREE.Vector3()
+    // ---- 冰雪模式 ----
+    this.winter = false
+    this.snow = null
+    this.snowMeta = null
     // ---- 规划幽灵层 / Bloom ----
     this.ghostEntries = []
     this.composer = null
@@ -136,7 +146,10 @@ export class MetroScene {
     this.buildGround()
     this.buildLines()
     this.buildTrains()
+    this.buildLineComets()
     this.buildGhostLines()
+    this.buildAmbient()
+    this.buildTransferGlows()
     this._initBloom()
     this.updateLabels(null, null)
 
@@ -567,6 +580,8 @@ export class MetroScene {
       train.dwell = 0.75
       this._pulseStation(entry, idx)
       this._flashStationLabel(entry, idx)
+      const stMesh = entry.stationMeshes[idx]
+      if (stMesh) this.spawnRipple(stMesh.position.x, stMesh.position.z, entry.tubeMat.color)
       const len = cum.length
       if (idx === 0) {
         train.dir = 1
@@ -1052,6 +1067,7 @@ export class MetroScene {
     const group = new THREE.Group()
     const segs = []
     const segMats = []
+    const glowSegs = []
     let total = 0
     for (const seg of route.segments) {
       const entry = this.lineEntries[seg.lineId]
@@ -1073,11 +1089,15 @@ export class MetroScene {
         blending: THREE.AdditiveBlending,
         depthWrite: false
       })
-      this._tubeAlong(group, pts, 2.6, glowMat)
+      const segGlowMeshes = this._tubeAlong(group, pts, 2.6, glowMat)
       const cum = [0]
       for (let i = 1; i < pts.length; i += 1) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]))
       segs.push({ pts, cum, color: seg.color, base: total, len: cum[cum.length - 1] })
       segMats.push(glowMat)
+      // 描线动画：记录每根管（锚点/方向/长度），所属段起点与段长（换算全程占比在循环外）
+      for (const g of segGlowMeshes) {
+        glowSegs.push({ ...g, segBase: total, segLen: cum[cum.length - 1] })
+      }
       total += cum[cum.length - 1]
     }
     if (!segs.length || total <= 0) {
@@ -1086,6 +1106,11 @@ export class MetroScene {
         if (o.material) o.material.dispose()
       })
       return
+    }
+    // 全程占比换算：[f0, f1] 为该管在整条路线上的弧长区间
+    for (const g of glowSegs) {
+      g.f0 = g.segBase / total
+      g.f1 = (g.segBase + g.segLen) / total
     }
 
     // 流光粒子：数量随路径长度伸缩，均匀散布、匀速循环
@@ -1165,7 +1190,7 @@ export class MetroScene {
       if (mesh) pulseMeshes.push({ mesh, base: mesh.scale.clone() })
     }
 
-    this.route = { group, inst, states, segs, segMats, total, rings, flags, pulseMeshes }
+    this.route = { group, inst, states, segs, segMats, total, rings, flags, pulseMeshes, glowSegs, drawT: this.reduceMotion ? 1 : 0 }
     this.routeLineIds = new Set(route.segments.map((s) => s.lineId))
     this.scene.add(group)
     this._applyFocus()
@@ -1187,8 +1212,9 @@ export class MetroScene {
     this._applyFocus()
   }
 
-  /** 沿折线铺发光管：开式圆柱端点严格落在站点上，与主线路同构 */
+  /** 沿折线铺发光管：开式圆柱端点严格落在站点上，与主线路同构；返回每根管的锚点信息（描线动画用） */
   _tubeAlong(parent, pts, radius, mat) {
+    const meshes = []
     for (let i = 1; i < pts.length; i += 1) {
       const a = pts[i - 1]
       const b = pts[i]
@@ -1200,7 +1226,9 @@ export class MetroScene {
       seg.position.copy(a).addScaledVector(dir, 0.5)
       seg.quaternion.setFromUnitVectors(UP_Y, dir.clone().normalize())
       parent.add(seg)
+      meshes.push({ mesh: seg, a: a.clone(), dir: dir.clone(), len })
     }
+    return meshes
   }
 
   /** 按全程偏移量定位所在乘车段（segs 按 base 升序） */
@@ -1224,6 +1252,17 @@ export class MetroScene {
   _updateRoute(dt) {
     const r = this.route
     if (!r) return
+    // 描线动画：glow 管按全程弧长比例从起点逐渐「画」到终点
+    if (r.drawT < 1) {
+      r.drawT = Math.min(1, r.drawT + dt / 1.6)
+      for (const g of r.glowSegs) {
+        const frac = (r.drawT - g.f0) / Math.max(g.f1 - g.f0, 0.0001)
+        const clamped = THREE.MathUtils.clamp(frac, 0, 1)
+        g.mesh.visible = clamped > 0.001
+        g.mesh.scale.y = Math.max(clamped, 0.001)
+        g.mesh.position.copy(g.a).addScaledVector(g.dir, (g.len * clamped) / 2)
+      }
+    }
     if (!this.reduceMotion) {
       const m = new THREE.Matrix4()
       const col = new THREE.Color()
@@ -1390,6 +1429,7 @@ export class MetroScene {
    * @param animate 是否补间；false 用于首帧定位与旋转屏后的重新构图
    */
   flyTo(pos, look, animate = true) {
+    this.markInteraction()
     if (this._intro) this._finishIntro(false)
     this.lastView = { pos: pos.clone(), look: look.clone() }
     const p = new THREE.Vector3(
@@ -1417,6 +1457,28 @@ export class MetroScene {
     if (this.hemiLight) {
       this.hemiLight.groundColor.set(hexToNumber(cssVar('--scene-bounce'), 0x141c30))
     }
+    // 冰雪模式：雪地平面懒构建（半透明盖住网格，营造结霜地面）
+    if (this.winter && !this.snowGround) {
+      const g = new THREE.PlaneGeometry(2200, 1800)
+      const m = new THREE.MeshBasicMaterial({
+        color: 0x9fb8d8,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false
+      })
+      this.snowGround = new THREE.Mesh(g, m)
+      this.snowGround.rotation.x = -Math.PI / 2
+      this.snowGround.position.y = -1.6
+      this.scene.add(this.snowGround)
+    }
+    if (this.snowGround) {
+      this.snowGround.visible = this.winter
+      this.snowGround.material.opacity = this.winter ? 0.16 : 0
+    }
+    // 氛围层主题联动：星星仅夜间可见，微尘白天降透明
+    const cityLight = document.documentElement.classList.contains('theme-light')
+    if (this.stars) this.stars.visible = !cityLight
+    if (this.dustMat) this.dustMat.opacity = cityLight ? 0.28 : 0.5
     if (this.bloomPass) {
       const light = document.documentElement.classList.contains('theme-light')
       if (light) {
@@ -1464,6 +1526,118 @@ export class MetroScene {
     this.reduceMotion = v
     this.controls.smoothTime = v ? 0.0001 : 0.7
     this.controls.draggingSmoothTime = v ? 0.0001 : 0.15
+    if (v && this.roaming) this.exitRoam()
+  }
+
+  /** 用户交互打点（拖拽/缩放/点击/按键），用于闲置判定与退出漫游 */
+  markInteraction() {
+    this.lastInteraction = this.elapsed
+    if (this.roaming) this.exitRoam()
+  }
+
+  setRoamAllowed(v) {
+    this.roamAllowed = v
+    if (!v && this.roaming) this.exitRoam()
+  }
+
+  /** 自由漫游：闲置 8 秒自动进入，相机沿线网缓慢巡航，任意交互退出 */
+  enterRoam() {
+    if (this.roaming || this.reduceMotion || this.followTrain || this._intro || this.section) return
+    const ids = Object.keys(this.lineEntries)
+    if (!ids.length) return
+    this.roam = {
+      lineId: ids[Math.floor(Math.random() * ids.length)],
+      s: Math.random() * 0.3,
+      dir: 1
+    }
+    this.roaming = true
+    this.controls.enabled = false
+    const dirV = new THREE.Vector3()
+    this.camera.getWorldDirection(dirV)
+    this._roamLook.copy(this.camera.position).addScaledVector(dirV, 120)
+    this.callbacks.onRoamChange?.(true)
+  }
+
+  exitRoam() {
+    if (!this.roaming) return
+    this.roaming = false
+    this.roam = null
+    this.controls.enabled = true
+    this.callbacks.onRoamChange?.(false)
+  }
+
+  _updateRoam(dt) {
+    if (!this.roaming || !this.roam) return
+    const entry = this.lineEntries[this.roam.lineId]
+    if (!entry) {
+      this.exitRoam()
+      return
+    }
+    this.roam.s += dt * 60 * this.roam.dir
+    if (this.roam.s >= entry.total) {
+      // 到达端点：换一条随机线继续巡游
+      const ids = Object.keys(this.lineEntries).filter((id) => id !== this.roam.lineId)
+      this.roam.lineId = ids[Math.floor(Math.random() * ids.length)]
+      this.roam.s = 0
+    }
+    const next = this.lineEntries[this.roam.lineId]
+    const { pos, tangent } = this._sample(next.pts, next.cum, this.roam.s)
+    if (this.roam.dir < 0) tangent.negate()
+    const camPos = pos.clone().addScaledVector(tangent, -150).add(new THREE.Vector3(0, 95, 0))
+    this.camera.position.lerp(camPos, 1 - Math.exp(-dt * 2))
+    this._roamLook.lerp(pos.clone().addScaledVector(tangent, 70), Math.min(1, dt * 2.5))
+    this.camera.lookAt(this._roamLook)
+  }
+
+  /** 冰雪模式：雪花粒子（懒构建）+ 地面泛霜（主题感知） */
+  setWinter(v) {
+    this.winter = v
+    if (v && !this.snow) this._buildSnow()
+    if (this.snow) this.snow.visible = v
+    this.setTheme()
+  }
+
+  _buildSnow() {
+    const n = isMobile() ? 450 : 1100
+    const pos = new Float32Array(n * 3)
+    this.snowMeta = []
+    for (let i = 0; i < n; i += 1) {
+      const x = -700 + Math.random() * 1400
+      const y = Math.random() * 230
+      const z = -460 + Math.random() * 920
+      pos[i * 3] = x
+      pos[i * 3 + 1] = y
+      pos[i * 3 + 2] = z
+      this.snowMeta.push({ speed: 11 + Math.random() * 19, sway: 3 + Math.random() * 6, phase: Math.random() * Math.PI * 2, bx: x })
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    this.snowMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 2.1,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false
+    })
+    this.snow = new THREE.Points(geo, this.snowMat)
+    this.snow.name = 'snow'
+    this.snow.visible = this.winter
+    this.scene.add(this.snow)
+  }
+
+  _updateSnow(dt) {
+    if (!this.snow || !this.snow.visible || this.reduceMotion) return
+    const t = this.elapsed
+    const pos = this.snow.geometry.attributes.position
+    for (let i = 0; i < this.snowMeta.length; i += 1) {
+      const m = this.snowMeta[i]
+      let y = pos.array[i * 3 + 1] - m.speed * dt
+      if (y < 0) y += 230
+      pos.array[i * 3 + 1] = y
+      pos.array[i * 3] = m.bx + Math.sin(t * 0.6 + m.phase) * m.sway
+    }
+    pos.needsUpdate = true
   }
 
   onResize() {
@@ -1496,6 +1670,16 @@ export class MetroScene {
     this._updatePulses(delta)
     this._updateRoute(delta)
     this._updateGhost(delta)
+    this._updateAmbient()
+    this._updateTransferGlows()
+    this._updateRipples(delta)
+    this._updateComets(delta)
+    this._updateRoam(delta)
+    this._updateSnow(delta)
+    // 闲置 8 秒自动进入自由漫游
+    if (!this.roaming && this.roamAllowed && !this.reduceMotion && this.elapsed - this.lastInteraction > 8) {
+      this.enterRoam()
+    }
     this.cullLabels()
     if (this.composer) this.composer.render(delta)
     else this.renderer.render(this.scene, this.camera)
@@ -1511,7 +1695,230 @@ export class MetroScene {
     }
   }
 
-  dispose() {
+  /**
+   * 氛围层：夜空星星穹顶 + 场内漂浮微尘（Points，性能极轻）。
+   * 星星仅夜间主题显示；移动端数量减半。
+   */
+  buildAmbient() {
+    const mobile = isMobile()
+    // 星星穹顶
+    const starN = mobile ? 320 : 720
+    const starPos = new Float32Array(starN * 3)
+    for (let i = 0; i < starN; i += 1) {
+      const az = Math.random() * Math.PI * 2
+      const el = 0.18 + Math.random() * 1.15 // 仰角弧度（避免贴地平线）
+      const r = 1500 + Math.random() * 900
+      starPos[i * 3] = Math.cos(el) * Math.cos(az) * r
+      starPos[i * 3 + 1] = Math.sin(el) * r
+      starPos[i * 3 + 2] = Math.cos(el) * Math.sin(az) * r
+    }
+    const starGeo = new THREE.BufferGeometry()
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3))
+    this.starMat = new THREE.PointsMaterial({
+      color: 0xbfd4ff,
+      size: 2.4,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.8,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })
+    this.stars = new THREE.Points(starGeo, this.starMat)
+    this.stars.name = 'ambient-stars'
+    this.scene.add(this.stars)
+
+    // 漂浮微尘
+    const dustN = mobile ? 90 : 200
+    const dustPos = new Float32Array(dustN * 3)
+    this.dustMeta = []
+    for (let i = 0; i < dustN; i += 1) {
+      const x = -650 + Math.random() * 1300
+      const y = 6 + Math.random() * 90
+      const z = -480 + Math.random() * 960
+      dustPos[i * 3] = x
+      dustPos[i * 3 + 1] = y
+      dustPos[i * 3 + 2] = z
+      this.dustMeta.push({ bx: x, by: y, bz: z, phase: Math.random() * Math.PI * 2, speed: 0.2 + Math.random() * 0.3 })
+    }
+    const dustGeo = new THREE.BufferGeometry()
+    dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3))
+    this.dustMat = new THREE.PointsMaterial({
+      color: 0x9fd8ff,
+      size: 1.7,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })
+    this.dust = new THREE.Points(dustGeo, this.dustMat)
+    this.dust.name = 'ambient-dust'
+    this.scene.add(this.dust)
+  }
+
+  /** 微尘漂浮 + 星星呼吸 */
+  _updateAmbient() {
+    const t = this.elapsed
+    if (this.starMat) this.starMat.opacity = 0.68 + 0.16 * Math.sin(t * 0.7)
+    if (this.dust && !this.reduceMotion) {
+      const pos = this.dust.geometry.attributes.position
+      for (let i = 0; i < this.dustMeta.length; i += 1) {
+        const m = this.dustMeta[i]
+        pos.array[i * 3] = m.bx + Math.sin(t * 0.12 + m.phase * 1.7) * 12
+        pos.array[i * 3 + 1] = m.by + Math.sin(t * m.speed + m.phase) * 7
+        pos.array[i * 3 + 2] = m.bz + Math.cos(t * 0.1 + m.phase) * 12
+      }
+      pos.needsUpdate = true
+    }
+  }
+
+  /**
+   * 换乘站能量井：渐变光柱 + 贴地光圈呼吸（20 个换乘站，枢纽地标感）。
+   * 材质每站独立以便相位错开的呼吸。
+   */
+  buildTransferGlows() {
+    const seen = new Set()
+    this.transferGlows = []
+    for (const line of metroLines) {
+      for (const st of line.stations) {
+        if (!(st.transfer || []).length || seen.has(st.name)) continue
+        seen.add(st.name)
+        const { X, Z } = toXZ(st.x, st.y)
+        const phase = Math.random() * Math.PI * 2
+        const pillarMat = new THREE.MeshBasicMaterial({
+          color: 0x9fd8ff,
+          transparent: true,
+          opacity: 0.12,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        })
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.6, 30, 12, 1, true), pillarMat)
+        pillar.position.set(X, 15, Z)
+        this.scene.add(pillar)
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0x9fd8ff,
+          transparent: true,
+          opacity: 0.3,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        })
+        const ringGeo = new THREE.RingGeometry(4.6, 6.2, 30)
+        ringGeo.rotateX(-Math.PI / 2)
+        const ring = new THREE.Mesh(ringGeo, ringMat)
+        ring.position.set(X, 1.6, Z)
+        this.scene.add(ring)
+        this.transferGlows.push({ pillarMat, ringMat, ring, phase })
+      }
+    }
+  }
+
+  _updateTransferGlows() {
+    if (this.reduceMotion) return
+    const t = this.elapsed
+    for (const g of this.transferGlows) {
+      const k = 0.5 + 0.5 * Math.sin(t * 1.6 + g.phase)
+      g.pillarMat.opacity = 0.09 + 0.07 * k
+      g.ringMat.opacity = 0.18 + 0.16 * k
+      g.ring.scale.setScalar(1 + 0.09 * k)
+    }
+  }
+
+  /** 进站波纹：列车停靠瞬间从站台扩散一圈涟漪 */
+  spawnRipple(x, z, color) {
+    if (this.reduceMotion) return
+    if (!this.ripples) this.ripples = []
+    if (this.ripples.length > 12) return
+    const geo = new THREE.RingGeometry(3, 3.6, 30)
+    geo.rotateX(-Math.PI / 2)
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.position.set(x, 1.7, z)
+    this.scene.add(mesh)
+    this.ripples.push({ mesh, ttl: 0.9, dur: 0.9 })
+  }
+
+  _updateRipples(dt) {
+    if (!this.ripples) return
+    for (let i = this.ripples.length - 1; i >= 0; i -= 1) {
+      const r = this.ripples[i]
+      r.ttl -= dt
+      if (r.ttl <= 0) {
+        this.scene.remove(r.mesh)
+        r.mesh.geometry.dispose()
+        r.mesh.material.dispose()
+        this.ripples.splice(i, 1)
+        continue
+      }
+      const k = 1 - r.ttl / r.dur
+      r.mesh.scale.setScalar(1 + k * 2.4)
+      r.mesh.material.opacity = 0.65 * (1 - k)
+    }
+  }
+
+  /**
+   * 线路流光脉冲：每条线一枚亮脉冲沿管线巡航（换向折返），像能量在线路里流动。
+   */
+  buildLineComets() {
+    const geo = new THREE.SphereGeometry(1.5, 10, 8)
+    const haloGeo = new THREE.SphereGeometry(2.6, 10, 8)
+    this.comets = []
+    for (const line of metroLines) {
+      const entry = this.lineEntries[line.lineId]
+      if (!entry) continue
+      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false })
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(line.color),
+        transparent: true,
+        opacity: 0.4,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      })
+      const core = new THREE.Mesh(geo, coreMat)
+      const halo = new THREE.Mesh(haloGeo, haloMat)
+      core.visible = false
+      halo.visible = false
+      this.scene.add(core)
+      this.scene.add(halo)
+      this.comets.push({ lineId: line.lineId, dir: 1, s: Math.random() * entry.total, core, halo, coreMat, haloMat })
+    }
+  }
+
+  _updateComets(dt) {
+    if (this.reduceMotion) return
+    for (const c of this.comets) {
+      const entry = this.lineEntries[c.lineId]
+      if (!entry) continue
+      c.s += dt * 85 * c.dir
+      if (c.s >= entry.total) {
+        c.s = entry.total
+        c.dir = -1
+      } else if (c.s <= 0) {
+        c.s = 0
+        c.dir = 1
+      }
+      const { pos } = this._sample(entry.pts, entry.cum, c.s)
+      c.core.position.set(pos.x, entry.liftY + 2.4, pos.z)
+      c.halo.position.copy(c.core.position)
+      // 聚焦态压暗时脉冲随之收敛
+      const isFocus = !this.routeLineIds
+        ? !this.selectedLineId || c.lineId === this.selectedLineId
+        : this.routeLineIds.has(c.lineId)
+      c.core.visible = true
+      c.coreMat.opacity = isFocus ? 0.9 : 0.25
+      c.haloMat.opacity = isFocus ? 0.4 : 0.1
+    }
+  }
+
+dispose() {
     this.disposed = true
     if (this._arriveTimers) {
       Object.values(this._arriveTimers).forEach((t) => clearTimeout(t))

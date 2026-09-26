@@ -37,6 +37,8 @@ export default function MetroLayer() {
   const [route, setRoute] = useState(null)
   const [follow, setFollow] = useState(false)
   const [section, setSection] = useState(false)
+  const [roam, setRoam] = useState(false)
+  const [winter, setWinter] = useState(false)
   const [strategy, setStrategy] = useState('fast')
   // 策略要被 render 外的回调（3D 点选）读到，镜像成 ref
   const strategyRef = useRef('fast')
@@ -146,6 +148,7 @@ export default function MetroLayer() {
         onSelectLine: (lineId) => useStore.getState().selectLine(lineId),
         onFollowChange: (v) => setFollow(v),
         onSectionChange: (v) => setSection(v),
+        onRoamChange: (v) => setRoam(v),
         // 点空白处退出聚焦：清掉选中的线路/站点（规划面板打开时不干预）
         onEmptyClick: () => {
           if (latestRef.current.open) return
@@ -248,8 +251,32 @@ export default function MetroLayer() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // 交互打点：任何点击 / 滚轮 / 按键都会重置闲置计时并退出漫游
+  useEffect(() => {
+    const mark = () => sceneRef.current?.markInteraction()
+    window.addEventListener('pointerdown', mark, true)
+    window.addEventListener('wheel', mark, { capture: true, passive: true })
+    window.addEventListener('keydown', mark, true)
+    return () => {
+      window.removeEventListener('pointerdown', mark, true)
+      window.removeEventListener('wheel', mark, { capture: true })
+      window.removeEventListener('keydown', mark, true)
+    }
+  }, [])
+
+  // 规划面板 / 剖面打开期间不进入自由漫游
+  useEffect(() => {
+    sceneRef.current?.setRoamAllowed(!(plannerOpen || section))
+  }, [plannerOpen, section])
+
   // 组件卸载时把跟随态复位（下次进层是全新场景，无需额外处理）
   useEffect(() => () => setFollow(false), [])
+
+  const toggleWinter = () => {
+    const next = !winter
+    setWinter(next)
+    sceneRef.current?.setWinter(next)
+  }
 
   const setCamera = (mode) => {
     const scene = sceneRef.current
@@ -308,6 +335,9 @@ export default function MetroLayer() {
           onClick={toggleSection}
         >
           剖面
+        </button>
+        <button className={'view-btn' + (winter ? ' on' : '')} onClick={toggleWinter} title="冰雪模式：飘雪 + 地面结霜">
+          冬季
         </button>
       </div>
 
@@ -465,6 +495,13 @@ export default function MetroLayer() {
         <button className="follow-chip" onClick={() => sceneRef.current?.exitFollow()}>
           <i />
           跟随列车中 · 点击画面或按 ESC 退出
+        </button>
+      )}
+
+      {roam && (
+        <button className="follow-chip roam-chip" onClick={() => sceneRef.current?.markInteraction()}>
+          <i />
+          自由漫游中 · 任意操作接管镜头
         </button>
       )}
     </div>
