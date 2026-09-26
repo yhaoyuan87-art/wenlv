@@ -195,36 +195,56 @@ export class MetroScene {
     this.scene.add(grid)
     this.gridHelper = grid
 
+    // 区划底图：离屏 canvas 合成（像素级填充天然无缝、后画覆盖先画无叠色），
+    // 再作为整张纹理铺在地面——支持整体提亮与每个区的边缘微光
+    const OFF_X = -60
+    const OFF_Y = -160
+    const W = 1340
+    const H = 1010
+    const cv = document.createElement('canvas')
+    cv.width = W
+    cv.height = H
+    const ctx = cv.getContext('2d')
     for (const d of districts) {
-      const shape = new THREE.Shape()
-      // 质心膨胀 2%：相邻区划贴片互相搭接 ~2-4 单位，
-      // 消除共享边三角化/光栅化产生的细缝与不共顶点边界段的楔形缺口
-      const cx = d.polygon.reduce((s, p) => s + p[0], 0) / d.polygon.length
-      const cy = d.polygon.reduce((s, p) => s + p[1], 0) / d.polygon.length
+      ctx.beginPath()
       d.polygon.forEach(([x, y], i) => {
-        const { X, Z } = toXZ(x, y)
-        // rotation.x = -π/2 会把形状 Y 映射到世界 -Z；这里取 -Z 保持与
-        // 站点/线路/标签（+Z）同一坐标系，否则地面区划会南北镜像（与城市 3D 相反）
-        const gx = X + (X - (cx - 500)) * 0.02
-        const gz = Z + (Z - (cy - 380)) * 0.02
-        if (i === 0) shape.moveTo(gx, -gz)
-        else shape.lineTo(gx, -gz)
+        const px = x - OFF_X
+        const py = y - OFF_Y
+        if (i === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
       })
-      const geo = new THREE.ShapeGeometry(shape)
-      const mat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(d.color),
-        transparent: true,
-        opacity: 0.05,
-        side: THREE.DoubleSide,
-        depthWrite: false
-      })
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.rotation.x = -Math.PI / 2
-      mesh.position.y = -1.9
-      mesh.userData = { type: 'district', id: d.districtId }
-      this.scene.add(mesh)
-      this.groundMats.push({ mesh, mat, id: d.districtId })
+      ctx.closePath()
+      ctx.fillStyle = d.color
+      ctx.fill()
+      // 边缘微光：柔光描边 + 轻微外发光
+      ctx.shadowColor = 'rgba(140, 220, 255, 0.85)'
+      ctx.shadowBlur = 7
+      ctx.strokeStyle = 'rgba(159, 216, 255, 0.4)'
+      ctx.lineWidth = 1.6
+      ctx.stroke()
+      ctx.shadowBlur = 0
+    }
+    const tex = new THREE.CanvasTexture(cv)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy()
+    const dGeo = new THREE.PlaneGeometry(W, H)
+    const dMat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+    const dMesh = new THREE.Mesh(dGeo, dMat)
+    dMesh.rotation.x = -Math.PI / 2
+    const c = toXZ(OFF_X + W / 2, OFF_Y + H / 2)
+    dMesh.position.set(c.X, -1.9, c.Z)
+    dMesh.userData = { type: 'districtCanvas' }
+    this.scene.add(dMesh)
+    this.groundMats.push({ mesh: dMesh, mat: dMat, id: 'all' })
 
+    // 区名标签（数据 label 坐标，与地铁空间地面标签同源）
+    for (const d of districts) {
       const labelDiv = document.createElement('div')
       labelDiv.className = 'metro-ground-label'
       labelDiv.textContent = d.name
