@@ -197,12 +197,18 @@ export class MetroScene {
 
     for (const d of districts) {
       const shape = new THREE.Shape()
+      // 质心膨胀 2%：相邻区划贴片互相搭接 ~2-4 单位，
+      // 消除共享边三角化/光栅化产生的细缝与不共顶点边界段的楔形缺口
+      const cx = d.polygon.reduce((s, p) => s + p[0], 0) / d.polygon.length
+      const cy = d.polygon.reduce((s, p) => s + p[1], 0) / d.polygon.length
       d.polygon.forEach(([x, y], i) => {
         const { X, Z } = toXZ(x, y)
         // rotation.x = -π/2 会把形状 Y 映射到世界 -Z；这里取 -Z 保持与
         // 站点/线路/标签（+Z）同一坐标系，否则地面区划会南北镜像（与城市 3D 相反）
-        if (i === 0) shape.moveTo(X, -Z)
-        else shape.lineTo(X, -Z)
+        const gx = X + (X - (cx - 500)) * 0.02
+        const gz = Z + (Z - (cy - 380)) * 0.02
+        if (i === 0) shape.moveTo(gx, -gz)
+        else shape.lineTo(gx, -gz)
       })
       const geo = new THREE.ShapeGeometry(shape)
       const mat = new THREE.MeshBasicMaterial({
@@ -497,26 +503,6 @@ export class MetroScene {
       this.scene.add(labelObj)
       this.ghostEntries.push({ mat, phase: gi * 2.1 })
     })
-
-    // 龙嘉机场航线示意：长春站 → 机场的暖色虚线大弧，与 9 号线「空港方向」规划呼应
-    const pa = toXZ(549, 262) // 长春站
-    const pb = toXZ(1260, 300) // 龙嘉机场
-    const va = new THREE.Vector3(pa.X, 12, pa.Z)
-    const vb = new THREE.Vector3(pb.X, 12, pb.Z)
-    const midV = va.clone().add(vb).multiplyScalar(0.5)
-    midV.y = 150
-    const arcCurve = new THREE.QuadraticBezierCurve3(va, midV, vb)
-    const arcMat = new THREE.LineDashedMaterial({
-      color: 0xffb457,
-      dashSize: 7,
-      gapSize: 6,
-      transparent: true,
-      opacity: 0.55
-    })
-    const arc = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arcCurve.getPoints(72)), arcMat)
-    arc.computeLineDistances()
-    this.scene.add(arc)
-    this.ghostEntries.push({ mat: arcMat, phase: 4.2, base: 0.55 })
   }
 
   /**
@@ -1487,7 +1473,9 @@ export class MetroScene {
     }
     if (this.snowGround) {
       this.snowGround.visible = this.winter
-      this.snowGround.material.opacity = this.winter ? 0.3 : 0
+      // 夜间雪地压暗到冰蓝，让饱和线路与辉光保持对比
+      this.snowGround.material.color.set(cityLight ? 0xd9e5f1 : 0x5d7ba6)
+      this.snowGround.material.opacity = this.winter ? (cityLight ? 0.3 : 0.22) : 0
     }
     // 氛围层主题联动：星星仅夜间可见，微尘白天降透明
     const cityLight = document.documentElement.classList.contains('theme-light')
@@ -1619,18 +1607,18 @@ export class MetroScene {
     this.winter = v
     if (v && !this.snow) this._buildSnow()
     if (this.snow) this.snow.visible = v
-    // 线路/列车「覆雪」：本色向雪白靠拢 40%，夜间发光相应变柔
+    // 线路/列车「冬季增强」：本色保持饱和，发光增强——浅色雪地上
+    // 饱和色 + 强辉光才有对比（往白里调反而和雪地融成一片）
     const WHITE = new THREE.Color(0xeef4ff)
     for (const line of metroLines) {
       const entry = this.lineEntries[line.lineId]
       if (!entry) continue
       const base = new THREE.Color(line.color)
-      const snowy = base.clone().lerp(WHITE, 0.42)
-      entry.tubeMat.color.copy(v ? snowy : base)
-      entry.tubeMat.emissive.copy((v ? snowy : base).clone().multiplyScalar(0.45))
+      entry.tubeMat.color.copy(base)
+      entry.tubeMat.emissive.copy(base.clone().multiplyScalar(v ? 0.85 : 0.45))
       if (entry.trainMat) {
-        entry.trainMat.color.copy(v ? snowy.clone().lerp(WHITE, 0.25) : base)
-        entry.trainMat.emissive.copy((v ? snowy : base).clone().multiplyScalar(0.75))
+        entry.trainMat.color.copy(base)
+        entry.trainMat.emissive.copy(base.clone().multiplyScalar(v ? 1 : 0.75))
       }
       if (entry.roofMat) {
         // 车顶积雪：冬季顶棚近乎纯白
